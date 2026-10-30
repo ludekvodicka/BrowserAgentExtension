@@ -11,13 +11,19 @@ use std::path::PathBuf;
 
 fn main() {
   let first = std::env::args().nth(1).unwrap_or_default();
-  let command: Option<fn() -> std::io::Result<serde_json::Value>> = match first.as_str() {
-    "install" => Some(install::install),
-    "uninstall" => Some(install::uninstall),
+  let arguments: Vec<String> = std::env::args().skip(2).collect();
+  let result = match (first.as_str(), arguments.as_slice()) {
+    ("install", []) => Some(install::install(None)),
+    ("install", [flag, folder]) if flag == "--extension" => Some(install::install(Some(std::path::Path::new(folder)))),
+    ("install", _) => Some(Err(std::io::Error::new(
+      std::io::ErrorKind::InvalidInput,
+      "usage: install [--extension <folder>]",
+    ))),
+    ("uninstall", []) => Some(install::uninstall()),
     _ => None,
   };
-  if let Some(command) = command {
-    match command() {
+  if let Some(result) = result {
+    match result {
       Ok(result) => println!("{result}"),
       Err(error) => {
         println!("{}", serde_json::json!({ "ok": false, "message": error.to_string() }));

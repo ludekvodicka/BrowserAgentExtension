@@ -1,6 +1,6 @@
 {
   "name": "browser-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Browser extension and native host that give coding agents permissioned tools in your own browser profiles",
   "license": "MIT",

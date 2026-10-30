@@ -18,7 +18,8 @@ it("lets the built host install itself and adds the extension folder to load", (
   vi.mocked(existsSync).mockReturnValue(true);
   vi.mocked(execFileSync).mockReturnValue('{"ok":true,"host":"/installed/browser-agent-host"}\n');
   const result = registerHost("/build/browser-agent-host");
-  expect(execFileSync).toHaveBeenCalledWith("/build/browser-agent-host", ["install"], { encoding: "utf8", windowsHide: true });
+  expect(execFileSync).toHaveBeenCalledWith("/build/browser-agent-host", ["install", "--extension", result.loadUnpacked],
+    { encoding: "utf8", windowsHide: true });
   expect(result).toMatchObject({ ok: true, host: "/installed/browser-agent-host" });
   expect(result.loadUnpacked).toMatch(/dist[\\/]extension$/);
 });

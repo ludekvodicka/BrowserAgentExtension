@@ -7,6 +7,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// Other applications (Meeting Recorder) read the extension folder from this file beside the host.
+pub const INSTALL_RECORD: &str = "browser-agent.json";
 pub const REGISTRY_KEY: &str = r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.ludekvodicka.browser_agent";
 
 #[derive(Debug, PartialEq)]
@@ -136,11 +138,61 @@ fn reg(arguments: &[&str]) -> io::Result<bool> {
   Ok(Command::new("reg.exe").args(arguments).output()?.status.success())
 }
 
-pub fn install() -> io::Result<Value> {
+fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
+  std::fs::create_dir_all(to)?;
+  for entry in std::fs::read_dir(from)? {
+    let entry = entry?;
+    if entry.file_type()?.is_dir() {
+      copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+    } else {
+      std::fs::copy(entry.path(), to.join(entry.file_name()))?;
+    }
+  }
+  Ok(())
+}
+
+/// The folder the user loads as the unpacked extension: the one named on the command line, or a
+/// copy of the release package's `extension` folder beside this binary, so the download can be deleted.
+pub fn install_extension(directory: &Path, named: Option<&Path>, executable: &Path) -> io::Result<Option<PathBuf>> {
+  if let Some(folder) = named {
+    if !folder.join("manifest.json").is_file() {
+      return Err(invalid("--extension must name a folder that holds manifest.json."));
+    }
+    return Ok(Some(std::path::absolute(folder)?));
+  }
+  let packaged = executable.parent().expect("the binary has a directory").join("extension");
+  if !packaged.join("manifest.json").is_file() {
+    return Ok(None);
+  }
+  let installed = directory.join("extension");
+  if !same_file(&packaged, &installed) {
+    if installed.exists() {
+      std::fs::remove_dir_all(&installed)?;
+    }
+    copy_tree(&packaged, &installed)?;
+  }
+  Ok(Some(installed))
+}
+
+pub fn write_record(directory: &Path, extension: Option<&Path>) -> io::Result<()> {
+  let record = directory.join(INSTALL_RECORD);
+  match extension {
+    Some(folder) => std::fs::write(record, serde_json::to_string_pretty(&json!({ "extension": folder }))? + "\n"),
+    None => match std::fs::remove_file(record) {
+      Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+      _ => Ok(()),
+    },
+  }
+}
+
+pub fn install(extension: Option<&Path>) -> io::Result<Value> {
   let plan = current_plan()?;
   let extension_id = extension_id();
   std::fs::create_dir_all(&plan.directory)?;
-  copy_binary(&std::env::current_exe()?, &plan.installed)?;
+  let executable = std::env::current_exe()?;
+  let extension = install_extension(&plan.directory, extension, &executable)?;
+  write_record(&plan.directory, extension.as_deref())?;
+  copy_binary(&executable, &plan.installed)?;
   let _ = std::fs::remove_file(&plan.legacy_launcher);
   let text = serde_json::to_string_pretty(&manifest(&plan.installed, &extension_id))? + "\n";
   for path in &plan.manifests {
@@ -155,7 +207,7 @@ pub fn install() -> io::Result<Value> {
   }
   Ok(
     json!({ "ok": true, "extensionId": extension_id, "host": plan.installed, "hostManifests": plan.manifests,
-    "registryKey": plan.registry_key }),
+    "registryKey": plan.registry_key, "extension": extension }),
   )
 }
 
@@ -171,6 +223,11 @@ pub fn uninstall() -> io::Result<Value> {
     }
   }
   let _ = std::fs::remove_file(&plan.legacy_launcher);
+  write_record(&plan.directory, None)?;
+  let copied = plan.directory.join("extension");
+  if copied.exists() {
+    std::fs::remove_dir_all(&copied)?;
+  }
   // A host the browser still runs keeps its Windows binary; it is set aside instead.
   if plan.installed.exists() && std::fs::remove_file(&plan.installed).is_err() {
     set_aside(&plan.installed)?;
@@ -217,6 +274,56 @@ mod tests {
     assert_eq!(plan.registry_key, None);
     assert!(macos_plan(Some("relative")).is_err());
     assert!(macos_plan(None).is_err());
+  }
+
+  fn temporary(name: &str) -> PathBuf {
+    let directory = std::env::temp_dir().join(format!("browser-agent-install-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(&directory).unwrap();
+    directory
+  }
+
+  #[test]
+  fn copies_the_packaged_extension_and_records_it() {
+    let root = temporary("packaged");
+    let download = root.join("download");
+    std::fs::create_dir_all(download.join("extension/hooks")).unwrap();
+    std::fs::write(download.join("extension/manifest.json"), "{}").unwrap();
+    std::fs::write(download.join("extension/hooks/a.js"), "x").unwrap();
+    let directory = root.join("install");
+    std::fs::create_dir_all(&directory).unwrap();
+    let folder = install_extension(&directory, None, &download.join("browser-agent-host"))
+      .unwrap()
+      .unwrap();
+    assert_eq!(folder, directory.join("extension"));
+    assert!(folder.join("hooks/a.js").is_file());
+    write_record(&directory, Some(&folder)).unwrap();
+    let record: Value = serde_json::from_str(&std::fs::read_to_string(directory.join(INSTALL_RECORD)).unwrap()).unwrap();
+    assert_eq!(record["extension"], json!(folder));
+    // Run again from the installed copy: the folder stays where it is.
+    assert_eq!(
+      install_extension(&directory, None, &directory.join("browser-agent-host")).unwrap(),
+      Some(folder)
+    );
+    write_record(&directory, None).unwrap();
+    write_record(&directory, None).unwrap();
+    assert!(!directory.join(INSTALL_RECORD).exists());
+    std::fs::remove_dir_all(&root).unwrap();
+  }
+
+  #[test]
+  fn records_a_named_folder_without_copying_and_none_without_a_package() {
+    let root = temporary("named");
+    std::fs::create_dir_all(root.join("dist")).unwrap();
+    assert!(install_extension(&root, Some(&root.join("dist")), &root.join("bin/host")).is_err());
+    std::fs::write(root.join("dist/manifest.json"), "{}").unwrap();
+    assert_eq!(
+      install_extension(&root, Some(&root.join("dist")), &root.join("bin/host")).unwrap(),
+      Some(root.join("dist"))
+    );
+    assert!(!root.join("extension").exists());
+    assert_eq!(install_extension(&root, None, &root.join("bin/host")).unwrap(), None);
+    std::fs::remove_dir_all(&root).unwrap();
   }
 
   #[test]

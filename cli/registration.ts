@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { posix } from "node:path";
+import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostName } from "../shared/protocol.ts";
 
@@ -38,6 +38,9 @@ export function registrationPresent(platform: NodeJS.Platform = process.platform
 export function registerHost(source = hostBinary()) {
   if (!existsSync(source))
     throw new Error(`The native host is not built: ${source}. Run npm run build first.`);
-  const result: unknown = JSON.parse(execFileSync(source, ["install"], { encoding: "utf8", windowsHide: true }));
-  return { ...result as object, loadUnpacked: fileURLToPath(new URL("../dist/extension", import.meta.url)) };
+  const extension = fileURLToPath(new URL("../dist/extension", import.meta.url));
+  // A checkout loads the build output itself, so install records that folder instead of copying it.
+  const args = existsSync(join(extension, "manifest.json")) ? ["install", "--extension", extension] : ["install"];
+  const result: unknown = JSON.parse(execFileSync(source, args, { encoding: "utf8", windowsHide: true }));
+  return { ...result as object, loadUnpacked: extension };
 }

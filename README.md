@@ -26,18 +26,22 @@ Download the package for your system from the
 `macos-universal`. It holds the extension (`extension/`) and the native host binary. Neither needs
 Node.js.
 
-1. Unzip it to a folder you keep.
-2. Register the native host from that folder:
+1. Unzip it.
+2. Install from the unzipped folder:
    - Windows: `browser-agent-host.exe install`
    - macOS: `xattr -dr com.apple.quarantine .` and then `./browser-agent-host install`. The binary is
      not notarized, so macOS refuses to start a downloaded copy until the quarantine flag is removed.
+
+   `install` copies the host and the `extension` folder to a per-user location and prints that
+   folder as `extension`. The download can be deleted afterwards.
 3. In each Brave or Chrome profile that should be reachable, open `brave://extensions` or
    `chrome://extensions`, turn on Developer mode, choose Load unpacked and select the `extension`
-   folder.
+   folder that `install` printed.
 4. Open the extension popup, set a label (for example `work`), turn on Agent access and enable the
    tools the agent may use. Enabling a tool asks the browser for the site permission that tool needs.
 
-`browser-agent-host uninstall` removes the registration and the installed copy.
+`browser-agent-host uninstall` removes the registration, the installed host and the installed
+extension folder; remove the extension from each profile as well.
 
 The fixed `key` in `extension/manifest.json` gives the extension the same ID in every profile, so one
 registration serves all of them, and a reload keeps each profile's label and grants.
@@ -54,7 +58,8 @@ node cli/browserAgent.ts register
 ```
 
 `npm run build` bundles the extension into `dist/extension` and builds the host with
-`cargo build --release`. `register` runs `browser-agent-host install` on that build. Then load
+`cargo build --release`. `register` runs `browser-agent-host install --extension dist/extension` on
+that build: the extension is not copied, and the install record names `dist/extension`. Then load
 `dist/extension` as in steps 3 and 4 above. Run `register` again after each host build.
 
 ## What `install` changes
@@ -72,6 +77,11 @@ rebuild never meets a binary a running browser holds.
   `com.ludekvodicka.browser_agent.json` in both
   `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` and
   `~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/`.
+
+Beside the installed host, a release install also places the `extension` folder, and every install
+writes `browser-agent.json` with `{ "extension": "<folder>" }`: the folder the profiles load. Other
+local applications read it through the registered host manifest; Meeting Recorder shows it in its
+Settings.
 
 The macOS host serves `~/.browser-agent/run/browser-agent-<instanceId>.sock`, with mode 0600 in a
 directory with mode 0700; it closes and removes the socket on normal exit or SIGINT/SIGTERM. The
