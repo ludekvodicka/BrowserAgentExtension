@@ -1,25 +1,65 @@
 # Browser Agent
 
-A Chromium Manifest V3 extension for Brave and Chrome that lets a coding agent (Claude Code, Codex) use
-tools in the user's own signed-in browser profiles. Each profile decides what the agent may use: a master
-switch "Agent access" and one switch per tool, both off by default. The tools read Slack (session
-cookies, read-only API calls), Outlook mail and the open Gmail conversation (both read-only) from the
-profile's open tabs, save that conversation's attachments into the browser's download folder, and
-open a filled Gmail draft or a reply to the open conversation, with attached files, that only the
-user sends. A browser tool opens a web page in a new tab of
-the profile. The Meetings tab lists Google Meet, Zoom Web and Teams Web meeting tabs on demand.
+Browser Agent lets a coding agent such as Claude Code or Codex do small, clearly limited jobs in the
+browser you already use: read a Slack thread, read your Outlook mail, read the Gmail conversation you
+have open, prepare a Gmail draft for you to send, or tell another app which meeting tabs are open.
 
-The project has three parts that share one wire protocol (`shared/protocol.ts`):
+It works inside your own signed-in Brave or Chrome profiles. The agent never gets your password, never
+drives the page like a robot and never sends anything on your behalf. Every profile decides for itself
+what the agent may use, and everything is off until you turn it on.
 
-| Part | Path | Role |
+<p align="center">
+  <img src="docs/images/popup-overview.png" width="380" alt="Browser Agent popup: Overview tab of a connected profile">
+</p>
+
+## What it can do
+
+| Area | Tool | What the agent gets |
 |---|---|---|
-| Extension | `extension/`, built into `dist/extension` | Holds the tools, the permission gate, the popup and the request log of each profile |
-| Native host | `host/` (Rust) | Started by the browser once per profile; relays between the extension and a Windows named pipe or macOS Unix socket |
-| CLI | `cli/browserAgent.ts` | Lists connected profiles, calls a tool, registers the native host |
+| Slack | Read workspace data | Channel history, thread replies, channel and user details from the signed-in workspace, read-only |
+| Slack | Session cookies | The Slack session cookies, written only into a file the agent names, never printed |
+| Outlook | Read mail | Mail folders and their messages from Outlook on the web, read-only |
+| Gmail | Read the open conversation | The text of the Gmail conversation open in a tab, read-only |
+| Gmail | Save attachments | The attachments of that conversation, saved into the browser's download folder |
+| Gmail | Open a new draft | A compose window filled with To, Cc, Bcc, subject, plain text and attached files. You send it |
+| Gmail | Draft a reply | A reply to the open conversation, filled the same way. You send it |
+| Browser | Open a web page | A page opened in a new tab of the profile, for you to look at |
+| Meetings | Google Meet, Zoom, Teams | The meeting tabs open in the profile, so a recorder can offer to record the call |
 
-Design and reasons: [docs/architecture/agent-channel.md](docs/architecture/agent-channel.md).
+The Meetings tools are what [Meeting Recorder](https://github.com/ludekvodicka/MeetingRecorder) uses to
+notice a browser meeting and show its recording prompt.
 
-## Install from a release
+## You stay in control
+
+- **Off by default.** A new profile has Agent access off and every tool off.
+- **Per profile.** Your work profile can allow Slack and Outlook while your personal profile allows nothing.
+- **Per tool.** Each tool has its own switch. Turning a tool on asks the browser for that tool's site
+  permission, so the browser enforces the limit too.
+- **One master switch.** Turning Agent access off refuses every request at once and keeps your tool choices.
+- **Nothing is sent.** The Gmail tools only fill a draft. Sending is always your click.
+- **Secrets stay out of sight.** A tool that returns a credential writes it only into a file; the
+  command line never prints it.
+- **You can see what happened.** The popup lists the last 20 requests: time, tool, caller and result.
+  It never shows the data that was returned.
+- **Local only.** The agent talks to the browser through a pipe (Windows) or a socket (macOS) on your
+  computer. There is no server, no account and no network port, and a web page cannot reach it.
+
+## The popup
+
+Click the Browser Agent icon in the toolbar to see and change everything for the current profile.
+
+| | |
+|---|---|
+| <img src="docs/images/popup-overview.png" width="360" alt="Overview tab"><br>**Overview:** connection state, profile label, Agent access, enabled tools and the latest requests. | <img src="docs/images/popup-not-connected.png" width="360" alt="Overview tab without a native host"><br>**Not connected:** the native host is not installed yet. The popup shows the one command that installs it. |
+| <img src="docs/images/popup-slack.png" width="360" alt="Slack tab"><br>**Slack:** read-only workspace data and the session cookies. | <img src="docs/images/popup-outlook.png" width="360" alt="Outlook tab"><br>**Outlook:** read mail in Outlook on the web. |
+| <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab. This tool needs no site permission. |
+| <img src="docs/images/popup-meetings.png" width="360" alt="Meetings tab"><br>**Meetings:** list Google Meet, Zoom and Teams meeting tabs for a recorder. | <img src="docs/images/popup-access.png" width="360" alt="Access tab"><br>**Access:** the profile label the agent uses to pick this profile, and the Agent access switch. |
+| <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. | |
+
+Each tool row shows the websites the tool needs. The label (for example `work`) is how you name the
+profile when you ask the agent for something, such as "read the Slack thread in my work profile".
+
+## Install
 
 Download the package for your system from the
 [releases](https://github.com/ludekvodicka/BrowserAgentExtension/releases): `windows-x64` or
@@ -37,14 +77,37 @@ Node.js.
 3. In each Brave or Chrome profile that should be reachable, open `brave://extensions` or
    `chrome://extensions`, turn on Developer mode, choose Load unpacked and select the `extension`
    folder that `install` printed.
-4. Open the extension popup, set a label (for example `work`), turn on Agent access and enable the
-   tools the agent may use. Enabling a tool asks the browser for the site permission that tool needs.
+4. Open the extension popup. On the Access tab set a label (for example `work`) and turn on Agent
+   access. Then turn on the tools the agent may use. The browser asks for each tool's site permission.
+
+The Overview tab then shows "Agent channel connected". If it shows "Not connected", run the `install`
+command from step 2 again and reload the extension.
 
 `browser-agent-host uninstall` removes the registration, the installed host and the installed
 extension folder; remove the extension from each profile as well.
 
 The fixed `key` in `extension/manifest.json` gives the extension the same ID in every profile, so one
 registration serves all of them, and a reload keeps each profile's label and grants.
+
+## Use it from an agent
+
+The agent uses the `browser-agent` command line from a checkout of this repository:
+
+```sh
+node cli/browserAgent.ts list
+node cli/browserAgent.ts call work appdata.slack.cookies --out <file> --caller <name>
+node cli/browserAgent.ts call work meetings.web.googleMeet --caller manual
+```
+
+`list` shows the profiles whose browser window runs, with their labels and tools. `call` names a
+profile by its label, a tool and the caller, which appears in the popup's request log.
+
+- A tool marked `sensitive` writes its value only into the `--out` file; the CLI never prints it.
+- `--file <path>`, repeatable, passes local files to a tool that accepts them (the Gmail draft and
+  reply tools), at most 25 MB together.
+- Exit codes: `0` success, `2` usage, `3` refusal with `{ "ok": false, "code", "message" }` on stdout.
+  A refusal names its reason, for example `access_off` or `tool_denied`, so the agent can tell you
+  which switch to turn on.
 
 ## Build from source
 
@@ -62,7 +125,21 @@ node cli/browserAgent.ts register
 that build: the extension is not copied, and the install record names `dist/extension`. Then load
 `dist/extension` as in steps 3 and 4 above. Run `register` again after each host build.
 
-## What `install` changes
+## How it works
+
+The project has three parts that share one wire protocol (`shared/protocol.ts`):
+
+| Part | Path | Role |
+|---|---|---|
+| Extension | `extension/`, built into `dist/extension` | Holds the tools, the permission gate, the popup and the request log of each profile |
+| Native host | `host/` (Rust) | Started by the browser once per profile; relays between the extension and a Windows named pipe or macOS Unix socket |
+| CLI | `cli/browserAgent.ts` | Lists connected profiles, calls a tool, registers the native host |
+
+The browser starts the host when the extension connects, so nothing runs before the agent asks, and a
+closed profile simply has no pipe. Design and reasons:
+[docs/architecture/agent-channel.md](docs/architecture/agent-channel.md).
+
+### What `install` changes
 
 The browsers start a per-user copy of the host, so the downloaded or built binary can move, and a
 rebuild never meets a binary a running browser holds.
@@ -93,18 +170,7 @@ A running profile keeps its old host until its native port reconnects. Reload th
 restart the browser to switch to a newly installed host. Each host process takes a few megabytes of
 memory.
 
-## Use
-
-```sh
-node cli/browserAgent.ts list
-node cli/browserAgent.ts call work appdata.slack.cookies --out <file> --caller <name>
-node cli/browserAgent.ts call work meetings.web.googleMeet --caller manual
-```
-
-`list` shows the profiles whose browser window runs. A tool marked `sensitive` writes its value only
-into the `--out` file; the CLI never prints it. `--file <path>`, repeatable, passes local files to a
-tool that accepts them (the Gmail draft and reply tools), at most 25 MB together. Exit codes: `0` success, `2` usage, `3` refusal with
-`{ "ok": false, "code", "message" }` on stdout.
+### Meeting tools
 
 Enable the desired tools in the popup's **Meetings** tab and allow their site permissions:
 
@@ -122,13 +188,16 @@ and `0`; access time otherwise is milliseconds since the Unix epoch. Successful 
 not enter the popup request log; refusals still do. Each call makes one tab query, with no page
 script, subscription or meeting timer.
 
+### Other clients
+
 Clients in other languages can use the same channel directly. Discover Windows pipes starting with
 `browser-agent-` in `\\.\pipe\`, or macOS socket files in `~/.browser-agent/run/`; connect to each and
 send `{"protocolVersion":4,"op":"describe"}` followed by LF. For a call send
 `{"protocolVersion":4,"op":"call","tool":"meetings.web.googleMeet","caller":"meeting-recorder"}`
-followed by LF. Each connection returns one UTF-8 JSON line; close the connection after reading it. Discover and address each
-profile separately; do not assume labels are unique. The complete shapes, limits, errors and Python
-client guidance are in [Agent channel: client wire format](docs/architecture/agent-channel.md#client-wire-format).
+followed by LF. Each connection returns one UTF-8 JSON line; close the connection after reading it.
+Discover and address each profile separately; do not assume labels are unique. The complete shapes,
+limits, errors and Python client guidance are in
+[Agent channel: client wire format](docs/architecture/agent-channel.md#client-wire-format).
 
 ## Add a tool
 
@@ -154,3 +223,5 @@ cd host && cargo fmt --check && cargo clippy --all-targets && cargo test
 
 `npm test` builds the host and drives the binary through stdin, stdout and a real pipe or socket.
 `host/src/protocol.rs` repeats the rules of `shared/protocol.ts`; change both together.
+
+The screenshots in `docs/images/` show the popup of the release build with sample data.
