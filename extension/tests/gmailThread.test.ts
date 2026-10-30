@@ -93,6 +93,13 @@ it("thread page reads the print view into sender, date, recipients, plain-text b
   expect(p.fetcher).toHaveBeenCalledExactlyOnceWith("/mail/u/0/?ik=ab12&view=pt&search=all&permthid=thread-f%3A2", { redirect: "error" });
 });
 
+it("thread page lists an attachment that Gmail shows in two rows once", async () => {
+  const row = `<table><tr><td><a href="?ui=2&amp;ik=ab12&amp;view=att&amp;th=1&amp;attid=0.1"><img></a></td><td><b>offer.pdf</b><br/>120K </td></tr></table>`;
+  const result = await page({ ok: true, text: printView.replace(row, row + row) }).run("0", "ab12", "thread-f:2");
+  expect(result).toMatchObject({ kind: "thread", messages: [{ attachments: [{ id: "1:0.1", name: "offer.pdf", size: "120K" }] }, { attachments: [] }] });
+  expect(printView).toContain(row);
+});
+
 it("thread page reads a conversation that the user's own sent message started", async () => {
   for (const threadId of ["thread-a:r-8379218361718728381", "thread-a:r8379218361718728381"]) {
     const p = page({ ok: true, text: printView });

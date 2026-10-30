@@ -37,6 +37,24 @@ it("saves every attachment of the open conversation through the browser's downlo
   expect(s.download).toHaveBeenNthCalledWith(2, expect.objectContaining({ filename: "browser-agent/gmail/42/a_b_c_.pdf" }));
 });
 
+it("starts every download before it waits for any", async () => {
+  const s = setup();
+  await gmailAttachments.run(undefined);
+  expect(Math.max(...s.download.mock.invocationCallOrder)).toBeLessThan(Math.min(...s.search.mock.invocationCallOrder));
+});
+
+it("reports downloads still running at the deadline as in progress", async () => {
+  const s = setup({ state: "in_progress", filename: "C:\\Downloads\\big.zip" });
+  vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(12_000);
+  try {
+    expect(await gmailAttachments.run(undefined)).toMatchObject({ ok: true, value: { saved: [
+      { state: "in_progress", path: "C:\\Downloads\\big.zip", bytes: null }, { state: "in_progress", bytes: null }] } });
+    expect(s.search).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
 it("saves only the named attachments and refuses an id the conversation does not have", async () => {
   const s = setup();
   expect(await gmailAttachments.run({ ids: ["1a17772c61c9a95d:0.2"] })).toMatchObject({ ok: true, value: { saved: [{ name: "a/b:c?.pdf" }] } });

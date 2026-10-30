@@ -100,8 +100,10 @@ Reasons:
   `browser-agent/gmail/<thread number>/` of the download folder. The browser's own download carries
   the Gmail session and follows Gmail's redirect to its attachment host, so no file content passes
   the 1 MiB native-messaging cap and no cookie leaves the browser. Only attachment ids the open
-  conversation lists are accepted. The tool waits up to 12 seconds, within the host's 15-second
-  request limit, and reports a download still running as `in_progress`. Saving files is a separate
+  conversation lists are accepted; the parser lists an id once, because Gmail's print view can show one
+  attachment in two rows. The tool starts all downloads at once (one by one, 31 files took about
+  20 seconds), waits until 12 seconds after the call arrived, within the host's 15-second request
+  limit, and reports a download still running as `in_progress`. Saving files is a separate
   switch from reading, and it needs the `downloads` permission.
 - **Gmail draft:** `appdata.gmail.draft` opens Gmail's own compose page (`/mail/u/<n>/?view=cm&fs=1`)
   with `to`, `cc`, `bcc`, `su` and `body` in the URL, as a new active tab beside the account's Gmail

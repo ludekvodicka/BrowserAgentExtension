@@ -38,7 +38,8 @@ export async function gmailThreadPage(user: string, ik: string, threadId: string
         const query = new URLSearchParams((row.querySelector("a[href*='view=att']")!.getAttribute("href") ?? "").split("?")[1] ?? "");
         const [th, attid] = [query.get("th"), query.get("attid")];
         return { id: th && attid ? `${th}:${attid}` : null, name, size: clean(text(row)).replace(name, "").trim() };
-      });
+      // Gmail can list one attachment in two rows (seen with a text file and its preview).
+      }).filter((attachment, index, all) => attachment.id === null || all.findIndex(other => other.id === attachment.id) === index);
       const body = content?.querySelector("td > table td > div");
       return { from: clean(text(header?.cells[0] ?? message)), date: clean(text(header?.cells[1] ?? message)),
         recipients: [...(recipients?.querySelectorAll(".recipient > div") ?? [])].map(line => clean(text(line))),
