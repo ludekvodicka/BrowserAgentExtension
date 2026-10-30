@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Browser Agent",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxiN0pt92zmVzK+j+aVULy2oWVDum4vP6HhqzhTyzUF0aon2Tzb/xkOtAjYkjhrK3/7N5Imye900YmVL+BpckD7QDmB2VxJaIAix+UYGbeB7H2PrQIA1dpYZ4STyBdT3zz2Ep+TznJyZcufGosGpANUuorniGpyoHkWojyuL7qdMnXBvkFw2McmEiYH/r0yu+8Qihd/7sxP0yxysgthiYku5kN5/8nUDgrJU5zm4RpK8gOdBEzsOXextDx19bjZC7E89A5e/P7uVyduz6eoNq8Phlgt7f4gGS4NxcxO5ZkZQj8iwsuWmCaE8OZZNKzTktS/SAcfGxtQt6G6bEF9+owwIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "cookies",
+    "alarms",
+    "scripting",
+    "downloads"
+  ],
+  "optional_host_permissions": ["https://*.slack.com/*", "https://outlook.cloud.microsoft/*", "https://mail.google.com/*",
+    "https://meet.google.com/*", "https://*.zoom.us/*", "https://teams.microsoft.com/*", "https://teams.cloud.microsoft/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png", "128": "icon128.png" },
+  "action": {
+    "default_title": "Browser Agent",
+    "default_icon": { "16": "icon16.png", "32": "icon32.png" }
+  }
+}

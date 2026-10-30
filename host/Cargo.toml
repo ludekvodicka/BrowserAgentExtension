@@ -1,0 +1,18 @@
+[package]
+name = "browser-agent-host"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Browser Agent native messaging relay between the extension and a named pipe or Unix socket"
+
+[dependencies]
+base64 = "0.22"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt", "net", "io-util", "io-std", "time", "sync", "macros", "signal"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

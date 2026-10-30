@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Agent</title>
+  <style>
+    :root { color-scheme: light dark; font: 13px/1.45 system-ui, sans-serif; --accent: #2563eb; --ok: #16a34a; --bad: light-dark(#b91c1c, #f87171); --line: #8885; }
+    body { width: 380px; margin: 0; box-sizing: border-box; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+    h1 { margin: 0; font-size: 16px; flex: 1; } h2 { font-size: 12px; margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+    p { margin: 6px 0; } label { display: flex; gap: 10px; align-items: center; }
+    nav { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+    nav button { border: 0; background: none; padding: 8px 10px; cursor: pointer; font: inherit; color: inherit; opacity: .7; border-bottom: 2px solid transparent; }
+    nav button[aria-selected=true] { opacity: 1; border-bottom-color: var(--accent); font-weight: 600; }
+    section[role=tabpanel] { padding: 6px 14px 12px; min-height: 230px; max-height: 360px; overflow-y: auto; }
+    input[type=text] { flex: 1; min-width: 0; padding: 6px; }
+    input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--accent); }
+    button.action { padding: 6px 12px; cursor: pointer; }
+    .muted { opacity: .7; font-size: 12px; } .row { display: flex; gap: 8px; align-items: center; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: 0 0 auto; } .dot.on { background: var(--ok); }
+    .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; } .facts dt { opacity: .7; } .facts dd { margin: 0; overflow-wrap: anywhere; }
+    .tool { padding: 8px 0; border-bottom: 1px solid var(--line); } .tool:last-child { border-bottom: 0; } .hosts { margin: 2px 0 0 26px; overflow-wrap: anywhere; }
+    .ok { color: var(--ok); } .refused { color: var(--bad); }
+    #error { color: var(--bad); overflow-wrap: anywhere; } [hidden] { display: none !important; }
+    code { overflow-wrap: anywhere; font-size: 11px; } ol { list-style: none; padding: 0; margin: 4px 0; } li { padding: 5px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+    #message { min-height: 18px; margin: 0; padding: 4px 14px 10px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Browser Agent</h1>
+    <span id="header-status" class="row muted"><span id="header-dot" class="dot"></span><span id="header-text">Connecting…</span></span>
+  </header>
+  <nav id="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button type="button" role="tab" data-tab="access" aria-selected="false">Access</button>
+    <button type="button" role="tab" data-tab="requests" aria-selected="false">Requests</button>
+  </nav>
+  <section id="tab-overview" role="tabpanel" aria-live="polite">
+    <div class="row"><span id="connection-dot" class="dot"></span><strong id="connection">Connecting…</strong></div>
+    <p id="error" hidden></p>
+    <p id="registration" hidden>Register the host once on this PC:<br><code id="registration-command"></code></p>
+    <dl class="facts">
+      <dt>Profile</dt><dd id="summary-label"></dd>
+      <dt>Agent access</dt><dd id="summary-access"></dd>
+      <dt>Enabled tools</dt><dd id="summary-tools"></dd>
+      <dt>Last request</dt><dd id="summary-last"></dd>
+      <dt>Recent</dt><dd id="summary-recent"></dd>
+    </dl>
+  </section>
+  <section id="tab-access" role="tabpanel" hidden>
+    <h2>Profile label</h2>
+    <form id="label-form" class="row">
+      <input id="profile-label" type="text" autocomplete="off" placeholder="For example: work" aria-label="Profile label">
+      <button class="action" type="submit">Save</button>
+    </form>
+    <p id="instance" class="muted"></p>
+    <h2>Agent access</h2>
+    <label><input id="agent-access" type="checkbox">Allow the agent to use enabled tools</label>
+    <p class="muted">Turning access off keeps your tool choices.</p>
+  </section>
+  <section id="tab-requests" role="tabpanel" hidden>
+    <p class="muted">Last 20 requests. Returned data is never shown here.</p>
+    <ol id="requests"></ol>
+  </section>
+  <p id="message" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>

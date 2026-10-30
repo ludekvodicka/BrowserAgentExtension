@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            host: browser-agent-host.exe
+            register: browser-agent-host.exe install
+          - os: macos-latest
+            platform: macos-universal
+            host: browser-agent-host
+            register: ./browser-agent-host install
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check the versions agree with each other and the tag
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' host/Cargo.toml | head -1)"
+          [ "$version" = "$cargo_version" ] || { echo "package.json $version != host/Cargo.toml $cargo_version"; exit 1; }
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "tag ${GITHUB_REF_NAME} != v$version"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+      - run: npm run typecheck
+
+      # The popup tells a release user to run the binary next to it, not a checkout's CLI.
+      - name: Build the extension and the host
+        run: npm run build
+        env:
+          BROWSER_AGENT_REGISTRATION: ${{ matrix.register }}
+
+      - run: npm test
+
+      - name: Build a universal macOS host
+        if: runner.os == 'macOS'
+        working-directory: host
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create -output target/release/browser-agent-host \
+            target/aarch64-apple-darwin/release/browser-agent-host \
+            target/x86_64-apple-darwin/release/browser-agent-host
+          # Ad-hoc signature: Apple silicon refuses to run an unsigned binary. It is not notarized.
+          codesign --force --sign - target/release/browser-agent-host
+          lipo -info target/release/browser-agent-host
+
+      - name: Package
+        shell: bash
+        run: |
+          name="BrowserAgent-${{ steps.version.outputs.version }}-${{ matrix.platform }}"
+          mkdir -p "package/$name"
+          cp -R dist/extension "package/$name/extension"
+          cp "host/target/release/${{ matrix.host }}" "package/$name/"
+          cp README.md LICENSE THIRD-PARTY.md "package/$name/"
+          cd package
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -NoProfile -Command "Compress-Archive -Path '$name' -DestinationPath '$name.zip'"
+          else
+            ditto -c -k --keepParent "$name" "$name.zip"
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-agent-${{ matrix.platform }}
+          path: package/*.zip
+          if-no-files-found: error
+
+  release:
+    name: create draft GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums and notes
+        run: |
+          cd artifacts
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          {
+            echo '### Install'
+            echo
+            echo 'Unzip the package for your system and follow "Install from a release" in README.md.'
+            echo 'The host binaries are not code-signed (macOS: ad-hoc signature only). Check the SHA256 of your download:'
+            echo
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+          } > ../release-notes.md
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          draft: true
+          body_path: release-notes.md
+          files: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS.txt

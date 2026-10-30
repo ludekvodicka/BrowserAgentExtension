@@ -1,0 +1,9 @@
+# The manifest "key" is the public half of the key pair that fixes the extension ID; it is meant to
+# be published.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public extension manifest key"
+regexTarget = "line"
+regexes = ['''^\s*"key": "MII[A-Za-z0-9+/=]+",?\s*$''']

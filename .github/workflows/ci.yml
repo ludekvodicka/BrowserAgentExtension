@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+
+      - name: Rust format and lint
+        working-directory: host
+        run: |
+          cargo fmt --check
+          cargo clippy --release --all-targets -- -D warnings
+
+      - name: Rust tests
+        working-directory: host
+        run: cargo test --release
+
+      # Builds the extension and the host binary; the vitest suite then drives that binary through
+      # stdin, stdout and a real named pipe (Windows) or Unix socket (macOS).
+      - run: npm run build
+      - run: npm test
+
+  # Runs after a push has landed, so it cannot prevent a leak: a pushed secret is already exposed and
+  # has to be rotated. It stops a contributor pull request that carries a secret from reaching main.
+  gitleaks:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

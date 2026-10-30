@@ -1,0 +1,30 @@
+node_modules/
+dist/
+release/
+host/target/
+coverage/
+*.log
+.DS_Store
+
+# This tree is also the maintainer's internal SVN working copy; its metadata never ships.
+.svn/
+.hg/
+
+# Internal files kept in SVN: workflow notes, publish tooling, agent instructions and the
+# maintainer's agent skills, which name local paths. A public clone uses README.md and CONTRIBUTING.md.
+.aidocs/
+.private/
+.claude/
+.claude-home/
+skills/
+/CLAUDE.md
+/AGENTS.md
+.axapp.json
+
+# Secrets never belong in either repository. Env files are excluded in .git/info/exclude instead,
+# so the maintainer's local rollback store still keeps them; the export gate blocks them as well.
+*.local.json
+*.pem
+*.key
+*.p12
+*.pfx
