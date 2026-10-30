@@ -14,7 +14,7 @@ function setup(compose: GmailComposeResult = { kind: "filled", attached: [{ name
   return { query, executeScript };
 }
 
-it.each([[{ body: 1 }], [{ replyAll: "yes" }], [{ to: ["x@y.cz"] }], [{ account: "nope" }], [[]]])("refuses args %j before touching a tab", async args => {
+it.each([[{ body: 1 }], [{ replyAll: "yes" }], [{ to: ["x@y.cz"] }], [{ account: "nope" }], [{ from: "nope" }], [{ from: "a@b.cz", replyAll: true }], [[]]])("refuses args %j before touching a tab", async args => {
   const s = setup();
   expect(await gmailReply.run(args, [])).toMatchObject({ ok: false, code: "tool_args_invalid" });
   expect(s.query).not.toHaveBeenCalled();
@@ -25,17 +25,26 @@ it("opens the reply in the open conversation's tab with the body and files", asy
   expect(await gmailReply.run({ body: "Dobrý den,\nposílám.", replyAll: true }, files)).toEqual({ ok: true, value: { account: "a@example.com",
     threadId: "thread-f:42", replyAll: true, bodyLength: 19, attached: [{ name: "smlouva.pdf", shown: true }] } });
   const compose = s.executeScript.mock.calls.map(([injection]) => injection).find(injection => injection.world !== "MAIN");
-  expect(compose).toMatchObject({ target: { tabId: 3 }, args: ["replyAll", "Dobrý den,\nposílám.", files] });
+  expect(compose).toMatchObject({ target: { tabId: 3 }, args: ["replyAll", "Dobrý den,\nposílám.", files, null] });
 });
 
 it("defaults to a plain reply without body or files", async () => {
   const s = setup({ kind: "filled", attached: [] });
   expect(await gmailReply.run(undefined)).toMatchObject({ ok: true, value: { replyAll: false, bodyLength: 0, attached: [] } });
-  expect(s.executeScript.mock.calls.at(-1)![0]).toMatchObject({ args: ["reply", null, []] });
+  expect(s.executeScript.mock.calls.at(-1)![0]).toMatchObject({ args: ["reply", null, [], null] });
+});
+
+it("replies to the message of the sender named by from", async () => {
+  const s = setup({ kind: "filled", attached: [] });
+  expect(await gmailReply.run({ body: "x", from: "jana@example.com" })).toMatchObject({ ok: true, value: { from: "jana@example.com", replyAll: false } });
+  expect(s.executeScript.mock.calls.at(-1)![0]).toMatchObject({ args: ["reply", "x", [], "jana@example.com"] });
 });
 
 it.each([
   [{ kind: "no_reply_link" }, "tab_not_ready"],
+  [{ kind: "no_message" }, "tab_not_ready"],
+  [{ kind: "no_message_reply" }, "extension_error"],
+  [{ kind: "other_recipient" }, "extension_error"],
   [{ kind: "no_compose" }, "extension_error"],
   [{ kind: "no_attach_button" }, "extension_error"],
   [{ kind: "no_file_input" }, "extension_error"],

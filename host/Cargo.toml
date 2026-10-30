@@ -1,6 +1,6 @@
 [package]
 name = "browser-agent-host"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 publish = false
 description = "Browser Agent native messaging relay between the extension and a named pipe or Unix socket"

@@ -63,3 +63,14 @@ it("keeps a sender's file name a plain name", () => {
   expect(safeFileName(" report: Q3?.pdf ")).toBe("report_ Q3_.pdf");
   expect(safeFileName("...")).toBe("attachment");
 });
+
+it("names the folder of a conversation the user's own sent message started without the id prefix", async () => {
+  const s = setup();
+  tabInfo.threadId = "thread-a:r-83792";
+  try {
+    expect(await gmailAttachments.run({ ids: ["1a17336a31a58f16:0.1"] })).toMatchObject({ ok: true, value: { threadId: "thread-a:r-83792" } });
+    expect(s.download).toHaveBeenCalledWith(expect.objectContaining({ filename: "browser-agent/gmail/r-83792/card.jpg" }));
+  } finally {
+    tabInfo.threadId = "thread-f:42";
+  }
+});

@@ -1,9 +1,12 @@
 export type GmailComposeResult = { kind: "filled"; attached: { name: string; shown: boolean }[] }
-  | { kind: "no_reply_link" } | { kind: "no_compose" } | { kind: "no_attach_button" } | { kind: "no_file_input" };
+  | { kind: "no_reply_link" } | { kind: "no_message" } | { kind: "no_message_reply" } | { kind: "other_recipient" }
+  | { kind: "no_compose" } | { kind: "no_attach_button" } | { kind: "no_file_input" };
 
 // Runs in the Gmail tab (isolated world). It only opens a reply, types into the message body and hands files to the
 // compose window's file input: it never dispatches a key event and never touches the send button.
-export async function gmailComposePage(reply: "reply" | "replyAll" | null, body: string | null, files: { name: string; data: string }[]): Promise<GmailComposeResult> {
+// With `from`, it replies to the latest message of that sender through the message's own reply button.
+export async function gmailComposePage(reply: "reply" | "replyAll" | null, body: string | null, files: { name: string; data: string }[],
+  from: string | null = null): Promise<GmailComposeResult> {
   const wait = async <T>(find: () => T | null | undefined, ms: number): Promise<T | null> => {
     const end = Date.now() + ms;
     for (;;) {
@@ -19,7 +22,42 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
   };
   const editors = () => [...document.querySelectorAll<HTMLElement>("div[contenteditable='true'][role='textbox']")].filter(element => element.checkVisibility());
   let editor: HTMLElement | null;
-  if (reply) {
+  if (reply && from) {
+    // Each message of the open conversation is a list item whose first address element is its sender.
+    const target = from.toLowerCase();
+    const message = () => [...document.querySelectorAll<HTMLElement>("[role='main'] [role='listitem']")]
+      .filter(element => element.querySelector("[email]")?.getAttribute("email")?.toLowerCase() === target).at(-1);
+    // A longer conversation hides its middle messages behind a count bubble (div.adv, its button span.adx).
+    const bubble = [...document.querySelectorAll<HTMLElement>("[role='main'] div.adv [role='button']")].find(element => element.checkVisibility());
+    if (!message() && bubble)
+      press(bubble);
+    const item = message() ?? (bubble ? await wait(message, 3000) : undefined);
+    if (!item)
+      return { kind: "no_message" };
+    // The message's reply button (a plain <button>) carries the same localized label as the reply link below the
+    // conversation; that link may be hidden by an open reply, so its text is read regardless of visibility.
+    // button.DILLkc is the reply button's class when no such link exists.
+    const label = document.querySelector<HTMLElement>("span.ams.bkH")?.textContent?.trim();
+    const button = () => [...item.querySelectorAll<HTMLElement>("button, [role='button']")].filter(element => element.checkVisibility())
+      .find(element => label && (element.getAttribute("aria-label") === label || element.getAttribute("data-tooltip") === label) || element.matches("button.DILLkc"));
+    // A collapsed message expands on a press of its header row (div.kv; div.kQ when hidden behind the count).
+    if (!button())
+      press(item.querySelector<HTMLElement>(".kv, .kQ") ?? item.querySelector("[email]")!.parentElement!);
+    const found = await wait(button, 3000);
+    if (!found)
+      return { kind: "no_message_reply" };
+    const before = new Set(editors());
+    press(found);
+    editor = await wait(() => editors().find(element => !before.has(element)), 4000);
+    // The reply's recipients are chips (div.afV, address in data-hovercard-id) above its body, hidden while collapsed;
+    // the nearest ancestor of the body that holds chips is that reply's own recipient area.
+    let scope: HTMLElement | null = editor;
+    while (scope && !scope.querySelector("div.afV"))
+      scope = scope.parentElement;
+    const recipients = [...scope?.querySelectorAll("div.afV") ?? []].map(chip => (chip.getAttribute("data-hovercard-id") ?? chip.getAttribute("email") ?? "").toLowerCase());
+    if (editor && !recipients.includes(target))
+      return { kind: "other_recipient" };
+  } else if (reply) {
     // The reply links below the open conversation keep these class names in every display language.
     const link = [...document.querySelectorAll(reply === "reply" ? "span.ams.bkH" : "span.ams.bkI")].filter(element => element.checkVisibility()).at(-1);
     if (!link)

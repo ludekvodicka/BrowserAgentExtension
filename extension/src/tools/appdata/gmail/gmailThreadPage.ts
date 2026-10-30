@@ -25,7 +25,7 @@ export async function gmailThreadPage(user: string, ik: string, threadId: string
   };
   const clean = (value: string) => value.split("\n").map(line => line.trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   try {
-    if (location.origin !== "https://mail.google.com" || !/^\d{1,3}$/.test(user) || !/^[0-9a-z]{1,40}$/i.test(ik) || !/^thread-f:\d{1,30}$/.test(threadId))
+    if (location.origin !== "https://mail.google.com" || !/^\d{1,3}$/.test(user) || !/^[0-9a-z]{1,40}$/i.test(ik) || !/^thread-(f:|a:r-?)\d{1,30}$/.test(threadId))
       return { kind: "extension_error" };
     const response = await fetch(`/mail/u/${user}/?ik=${ik}&view=pt&search=all&permthid=${encodeURIComponent(threadId)}`, { redirect: "error" });
     if (!response.ok)

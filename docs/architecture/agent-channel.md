@@ -124,7 +124,16 @@ Reasons:
   browser), because the extension already finds the open conversation and its session in the tab.
   The cost is fragility: a Gmail UI change can move these selectors, and the tool then refuses with
   the step that failed. The script dispatches no key event and never touches the send button.
-  Recipients of a reply are Gmail's own (sender, or all with `replyAll`).
+  Recipients of a reply are Gmail's own (sender, or all with `replyAll`). With `from`, the script
+  first presses the count bubble that hides the middle messages of a longer conversation
+  (`div.adv [role="button"]`) when the sender is not shown, then
+  takes the last message list item (`[role="listitem"]`) whose first `[email]` element is that sender,
+  presses its header row (`div.kv`, `div.kQ`) to expand it when collapsed, and presses its own reply
+  button: the `<button>` whose `aria-label` equals the localized text of the reply link below (read
+  even when an open reply hides that link), else `button.DILLkc`. Before typing it checks the new reply's recipient chips
+  (`div.afV`, address in `data-hovercard-id`, hidden while the recipient line is collapsed) in the
+  nearest ancestor of its body that holds any, and refuses unless the sender is among them, so a wrong
+  recipient never gets text.
 - **Open a tab:** `browser.tabs.open` (section Browser) opens an `http` or `https` URL in a new active
   tab, in the profile's last focused window or in a `windowId` the caller got from an earlier call;
   any other scheme (`javascript:`, `file:`, `chrome:`) refuses, so the tool cannot run code in a

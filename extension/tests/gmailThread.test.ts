@@ -93,9 +93,17 @@ it("thread page reads the print view into sender, date, recipients, plain-text b
   expect(p.fetcher).toHaveBeenCalledExactlyOnceWith("/mail/u/0/?ik=ab12&view=pt&search=all&permthid=thread-f%3A2", { redirect: "error" });
 });
 
+it("thread page reads a conversation that the user's own sent message started", async () => {
+  for (const threadId of ["thread-a:r-8379218361718728381", "thread-a:r8379218361718728381"]) {
+    const p = page({ ok: true, text: printView });
+    expect(await p.run("0", "ab12", threadId)).toMatchObject({ kind: "thread", subject: "Fixture subject" });
+    expect(p.fetcher).toHaveBeenCalledExactlyOnceWith(`/mail/u/0/?ik=ab12&view=pt&search=all&permthid=${encodeURIComponent(threadId)}`, { redirect: "error" });
+  }
+});
+
 it("thread page refuses a foreign origin, malformed ids and a failed response", async () => {
   expect(await page({ ok: true, text: printView }, "https://evil.example").run("0", "ab12", "thread-f:2")).toEqual({ kind: "extension_error" });
-  for (const [user, ik, threadId] of [["0/x", "ab12", "thread-f:2"], ["0", "ab&x", "thread-f:2"], ["0", "ab12", "msg-f:2"]]) {
+  for (const [user, ik, threadId] of [["0/x", "ab12", "thread-f:2"], ["0", "ab&x", "thread-f:2"], ["0", "ab12", "msg-f:2"], ["0", "ab12", "thread-a:2"]]) {
     const p = page({ ok: true, text: printView });
     expect(await p.run(user, ik, threadId)).toEqual({ kind: "extension_error" });
     expect(p.fetcher).not.toHaveBeenCalled();

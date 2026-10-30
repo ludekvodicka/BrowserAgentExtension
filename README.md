@@ -22,7 +22,7 @@ what the agent may use, and everything is off until you turn it on.
 | Gmail | Read the open conversation | The text of the Gmail conversation open in a tab, read-only |
 | Gmail | Save attachments | The attachments of that conversation, saved into the browser's download folder |
 | Gmail | Open a new draft | A compose window filled with To, Cc, Bcc, subject, plain text and attached files. You send it |
-| Gmail | Draft a reply | A reply to the open conversation, filled the same way. You send it |
+| Gmail | Draft a reply | A reply to the open conversation, to everyone, or to the latest message from one sender in it, filled with text and attached files. You send it |
 | Browser | Open a web page | A page opened in a new tab of the profile, for you to look at |
 | Meetings | Google Meet, Zoom, Teams | The meeting tabs open in the profile, so a recorder can offer to record the call |
 
@@ -36,7 +36,8 @@ notice a browser meeting and show its recording prompt.
 - **Per tool.** Each tool has its own switch. Turning a tool on asks the browser for that tool's site
   permission, so the browser enforces the limit too.
 - **One master switch.** Turning Agent access off refuses every request at once and keeps your tool choices.
-- **Nothing is sent.** The Gmail tools only fill a draft. Sending is always your click.
+- **Nothing is sent.** The Gmail tools only fill a draft. Sending is always your click. A reply to
+  one sender is typed only after Gmail shows that sender among the reply's recipients.
 - **Secrets stay out of sight.** A tool that returns a credential writes it only into a file; the
   command line never prints it.
 - **You can see what happened.** The popup lists the last 20 requests: time, tool, caller and result.
@@ -103,6 +104,9 @@ node cli/browserAgent.ts call work meetings.web.googleMeet --caller manual
 profile by its label, a tool and the caller, which appears in the popup's request log.
 
 - A tool marked `sensitive` writes its value only into the `--out` file; the CLI never prints it.
+- `--args '<json>'` passes the tool's arguments. For example, `appdata.gmail.reply` takes `body`, and
+  either `replyAll: true` or `from: "<sender address>"` to answer that sender's latest message in a
+  longer conversation.
 - `--file <path>`, repeatable, passes local files to a tool that accepts them (the Gmail draft and
   reply tools), at most 25 MB together.
 - Exit codes: `0` success, `2` usage, `3` refusal with `{ "ok": false, "code", "message" }` on stdout.

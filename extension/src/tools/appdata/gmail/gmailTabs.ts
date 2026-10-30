@@ -51,15 +51,21 @@ export async function openConversationTab(account: string | undefined): Promise<
 }
 
 // Opens a reply (or takes the tab's only compose window), types the body and attaches the files; returns the attach outcome.
-export async function fillCompose(tabId: number, reply: "reply" | "replyAll" | null, body: string | null, files: ToolFile[])
+export async function fillCompose(tabId: number, reply: "reply" | "replyAll" | null, body: string | null, files: ToolFile[], from: string | null = null)
   : Promise<{ name: string; shown: boolean }[] | ToolResult> {
-  const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func: gmailComposePage, args: [reply, body, files] });
+  const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func: gmailComposePage, args: [reply, body, files, from] });
   const result = injection?.result;
   switch (result?.kind) {
     case "filled":
       return result.attached;
     case "no_reply_link":
       return { ok: false, code: "tab_not_ready", message: "Gmail shows no reply link below the open conversation. Scroll to its end or open it again, then retry." };
+    case "no_message":
+      return { ok: false, code: "tab_not_ready", message: `The open conversation shows no message from ${from}. Check the address or expand the conversation's messages, then retry.` };
+    case "no_message_reply":
+      return { ok: false, code: "extension_error", message: `Gmail showed no reply button on the message from ${from}. Expand that message, then retry.` };
+    case "other_recipient":
+      return { ok: false, code: "extension_error", message: `A reply opened, but its recipients do not show ${from}. Nothing was typed; discard the empty reply.` };
     case "no_compose":
       return { ok: false, code: "extension_error", message: "Gmail opened no compose window. Check the Gmail tab and retry." };
     case "no_attach_button":

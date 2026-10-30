@@ -45,7 +45,7 @@ export const gmailAttachments: BrowserTool = {
       const missing = ids === undefined ? [] : (ids as string[]).filter(id => !listed.some(attachment => attachment.id === id));
       if (missing.length)
         return { ok: false, code: "tool_args_invalid", message: `The open conversation has no attachment ${missing.join(", ")}; read appdata.gmail.thread for its ids.` };
-      const folder = `browser-agent/gmail/${thread.threadId.replace("thread-f:", "")}`;
+      const folder = `browser-agent/gmail/${thread.threadId.replace(/^thread-[af]:/, "")}`;
       const deadline = Date.now() + waitMs;
       const saved: Saved[] = [];
       for (const attachment of wanted) {
