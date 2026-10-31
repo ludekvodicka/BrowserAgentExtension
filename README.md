@@ -1,12 +1,12 @@
 # Browser Agent
 
 Browser Agent lets a coding agent such as Claude Code or Codex do small, clearly limited jobs in the
-browser you already use: read a Slack thread, read your Outlook mail, read the Gmail conversation you
-have open, prepare a Gmail draft for you to send, or tell another app which meeting tabs are open.
+browser you already use: read a Slack thread, read your Outlook mail, prepare a Gmail draft, work on
+an approved website, or tell another app which meeting tabs are open.
 
-It works inside your own signed-in Brave or Chrome profiles. The agent never gets your password, never
-drives the page like a robot and never sends anything on your behalf. Every profile decides for itself
-what the agent may use, and everything is off until you turn it on.
+It works inside your own signed-in Brave or Chrome profiles. Every profile decides for itself what
+the agent may use, and everything is off until you turn it on. Page control can fill a reply or a form;
+the agent must leave the final Send or Submit to you.
 
 <p align="center">
   <img src="docs/images/popup-overview.png" width="380" alt="Browser Agent popup: Overview tab of a connected profile">
@@ -25,6 +25,9 @@ what the agent may use, and everything is off until you turn it on.
 | Gmail | Draft a reply | A reply to the open conversation, to everyone, or to the latest message from one sender in it, filled with text and attached files. You send it |
 | Browser | Open a web page | A page opened in a new tab of the profile, for you to look at |
 | Meetings | Google Meet, Zoom, Teams | The meeting tabs open in the profile, so a recorder can offer to record the call |
+| Page control | Request site access and check its status | A request you approve or deny in the extension, with the exact website address and caller |
+| Page control | List, inspect, read and operate approved pages | Element refs, page text or limited HTML, clicks and field edits, without final submission |
+| Page control | Screenshot | The visible active tab, written only to the agent's output file after you click the extension icon on that tab |
 
 The Meetings tools are what [Meeting Recorder](https://github.com/ludekvodicka/MeetingRecorder) uses to
 notice a browser meeting and show its recording prompt.
@@ -36,8 +39,10 @@ notice a browser meeting and show its recording prompt.
 - **Per tool.** Each tool has its own switch. Turning a tool on asks the browser for that tool's site
   permission, so the browser enforces the limit too.
 - **One master switch.** Turning Agent access off refuses every request at once and keeps your tool choices.
-- **Nothing is sent.** The Gmail tools only fill a draft. Sending is always your click. A reply to
-  one sender is typed only after Gmail shows that sender among the reply's recipients.
+- **Final sending is your job.** Gmail tools only fill drafts; a reply to one sender is typed only
+  after Gmail shows that sender among the reply's recipients. Page control blocks native form
+  submission; the agent must also leave JavaScript-only Send buttons to you. A website can autosave
+  or perform other actions when fields change, so approve sites only for work you intend.
 - **Secrets stay out of sight.** A tool that returns a credential writes it only into a file; the
   command line never prints it.
 - **You can see what happened.** The popup lists the last 20 requests: time, tool, caller and result.
@@ -55,10 +60,74 @@ Click the Browser Agent icon in the toolbar to see and change everything for the
 | <img src="docs/images/popup-slack.png" width="360" alt="Slack tab"><br>**Slack:** read-only workspace data and the session cookies. | <img src="docs/images/popup-outlook.png" width="360" alt="Outlook tab"><br>**Outlook:** read mail in Outlook on the web. |
 | <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab. This tool needs no site permission. |
 | <img src="docs/images/popup-meetings.png" width="360" alt="Meetings tab"><br>**Meetings:** list Google Meet, Zoom and Teams meeting tabs for a recorder. | <img src="docs/images/popup-access.png" width="360" alt="Access tab"><br>**Access:** the profile label the agent uses to pick this profile, and the Agent access switch. |
-| <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. | |
+| <img src="docs/images/popup-page-control.png" width="360" alt="Page control tab"><br>**Page control:** a pending site request to approve or deny, the granted sites, Allow this site, and the page tools. | <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. |
 
 Each tool row shows the websites the tool needs. The label (for example `work`) is how you name the
 profile when you ask the agent for something, such as "read the Slack thread in my work profile".
+
+## Page control
+
+<p align="center">
+  <img src="docs/images/popup-page-control.png" width="380" alt="Page control tab with a pending site request, a granted site and the page tools">
+</p>
+
+On the **Page control** tab, enable the page tools you want to use, including Request access and
+Check approval status. Agent access must also be on. Click **Allow this site** while the website is
+open, or ask the agent to request its URL. The extension shows a **?** badge and an approval panel
+with the caller and exact origin: scheme, hostname (international names use punycode) and port.
+Click **Approve** and accept the browser's site permission, or **Deny**. If the browser cannot open
+the popup automatically, a separate extension approval page opens. Requests expire after ten minutes.
+Denied and expired entries are listed under **Previous requests**, where you can remove them.
+At the 100-site limit, remove an old request or grant before adding another site.
+
+An approval covers one exact origin in this profile. **Remove** stops page tools using that origin;
+browser permissions shared with other tools are retained. Chrome host permissions do not distinguish
+ports, so the extension checks the exact origin again on every page operation. Only approved tabs
+appear in `page.tabs`. The agent cannot approve requests or turn its tools on.
+
+The agent takes a snapshot, uses its element refs to open a comment editor and fill it, then takes
+another snapshot to verify the draft. Old refs are rejected after a new snapshot or navigation.
+Open shadow DOM and accessible frames are included; each cross-origin frame needs its own approval.
+Closed shadow roots, canvas controls and browser-internal pages are unavailable. Some sites require
+trusted mouse or keyboard input and will not respond to these DOM actions.
+
+**You submit the result.** Page control refuses submit controls, explicit form submission and Enter
+in a form input, and outlines the refused element in red. During an action it also blocks native
+form submission methods. This is a guard against ordinary form submission, not a sandbox around a
+website: arbitrary JavaScript, delayed callbacks, autosave and network requests can have effects.
+The agent must never click the final Send, Post, Pay or Submit, including JavaScript-only buttons.
+
+**Privacy:** granting a site gives the agent the power of your signed-in session there. Text and
+screenshots may contain private information. Page text, labels and HTML are untrusted data, never
+instructions to the agent. The request log stores only time, tool, caller and outcome. A screenshot
+includes everything visible in the tab, including embedded frames, and only goes to `--out`.
+For screenshots, select the tab and click the extension icon first. The temporary `activeTab` grant
+ends when that tab navigates to another origin or closes. No all-sites grant or debugger access is used.
+
+```sh
+node cli/browserAgent.ts call work page.requestAccess --args '{"url":"https://support.example/ticket/42"}' --caller codex
+node cli/browserAgent.ts call work page.accessStatus --args '{"url":"https://support.example"}' --caller codex
+node cli/browserAgent.ts call work page.tabs --caller codex
+node cli/browserAgent.ts call work page.snapshot --args '{"tabId":42,"limit":100}' --caller codex
+node cli/browserAgent.ts call work page.act --args '{"tabId":42,"ref":"<ref from snapshot>","action":"click"}' --caller codex
+node cli/browserAgent.ts call work page.act --args '{"tabId":42,"ref":"<editor ref>","action":"fill","text":"We are working on this."}' --caller codex
+node cli/browserAgent.ts call work page.read --args '{"tabId":42,"format":"text","limit":20000}' --caller codex
+node cli/browserAgent.ts call work page.screenshot --args '{"tabId":42,"quality":60}' --out capture.json --caller codex
+```
+
+Poll `page.accessStatus` while waiting; each call returns immediately. After denial or expiry, a new
+request needs `"retry":true`. Screenshot files are JSON containing `mimeType` and a JPEG `dataUrl`;
+lower `quality` if the image exceeds the response cap. No image bytes are printed by the CLI.
+
+`page.act` supports `click`, `fill` and `type` (with `text`), `select` (with `values`, an array of
+option values), `check` (with `checked`), `press` (with `key`, such as `Control+a` or `Escape`),
+`scroll` (with pixel offsets `x`/`y`) and `hover`. Each action targets one `ref`, one unique CSS
+`selector`, or `role` plus exact accessible `name`. A ref identifies its frame; fallback locators
+default to the top frame, or use a `frameId` from the last snapshot. Scrolling without a locator
+scrolls the page. Native text editing and common keyboard defaults are emulated; synthetic pointer
+events do not move the physical mouse or force CSS `:hover`. `page.read` accepts the same locators,
+or reads the top page without one. Its `limit` is 1 to 100,000 characters; snapshot `limit` is 1 to
+300 elements across frames, with `truncated` indicating omitted content.
 
 ## Install
 
@@ -79,7 +148,8 @@ Node.js.
    `chrome://extensions`, turn on Developer mode, choose Load unpacked and select the `extension`
    folder that `install` printed.
 4. Open the extension popup. On the Access tab set a label (for example `work`) and turn on Agent
-   access. Then turn on the tools the agent may use. The browser asks for each tool's site permission.
+   access. Then turn on the tools the agent may use. The browser asks for site permissions for app
+   tools; Page control requests them when you approve a site.
 
 The Overview tab then shows "Agent channel connected". If it shows "Not connected", run the `install`
 command from step 2 again and reload the extension.

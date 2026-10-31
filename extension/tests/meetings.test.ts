@@ -93,7 +93,7 @@ it("integrates registry, permission gate, tabs query and quiet logs for all meet
     const popup = { profile: describeProfile(await state.read(), tools, "0.1.0"), sections, groups,
       connection: { state: "connected", error: null }, log: await log.read() };
     await mountPopup(dom.window.document, { sendMessage: vi.fn(async () => popup) }, storage,
-      { contains: permissions.contains, request: vi.fn(), remove: vi.fn() }, "register");
+      { contains: permissions.contains, request: vi.fn(), remove: vi.fn() }, "register", { siteAccess: async () => {} });
     expect(dom.window.document.querySelector('[data-tab="group-meetings-web"]')?.textContent).toBe("Meetings");
     expect(dom.window.document.querySelectorAll('#tab-group-meetings-web [data-tool]')).toHaveLength(3);
   } finally {

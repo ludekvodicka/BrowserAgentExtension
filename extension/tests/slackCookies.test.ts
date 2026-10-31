@@ -47,6 +47,13 @@ it("real registry is described, denied before reading cookies, then allowed with
     { id: "meetings.web.googleMeet", section: "meetings", group: "web", sensitive: false, enabled: false },
     { id: "meetings.web.zoom", section: "meetings", group: "web", sensitive: false, enabled: false },
     { id: "meetings.web.teams", section: "meetings", group: "web", sensitive: false, enabled: false },
+    { id: "page.tabs", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.requestAccess", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.accessStatus", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.snapshot", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.read", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.act", section: "page", group: "control", sensitive: false, enabled: false },
+    { id: "page.screenshot", section: "page", group: "control", sensitive: true, enabled: false },
   ] } });
   await state.setAgentAccess(true);
   const request = { id: "call", op: "call" as const, protocolVersion, tool: slackCookies.id, caller: "fixture" };

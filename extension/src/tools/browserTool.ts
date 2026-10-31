@@ -1,7 +1,10 @@
 import type { ToolFile } from "../../../shared/protocol.ts";
 
 export type ToolResult = { ok: true; value: unknown }
-  | { ok: false; code: "not_signed_in" | "extension_error" | "tab_missing" | "tab_not_ready" | "tool_args_invalid" | "result_too_large"; message: string };
+  | { ok: false; code: "not_signed_in" | "extension_error" | "tab_missing" | "tab_not_ready" | "tool_args_invalid" | "result_too_large" | "permission_missing" | "tool_denied"; message: string };
+
+export type ToolFailure = Extract<ToolResult, { ok: false }>;
+export type ToolContext = { caller: string };
 
 // A script the tool needs in its site's main world from document_start, registered only while the tool is enabled and permitted.
 export type PageScript = { id: string; file: string; matches: string[] };
@@ -17,8 +20,9 @@ export interface BrowserTool {
   readonly pageScripts?: PageScript[];
   // Only such a tool receives the files a caller passes with --file; the dispatcher refuses them for any other.
   readonly acceptsFiles?: boolean;
-  run(args: unknown, files?: ToolFile[]): Promise<ToolResult>;
+  checkAccess?(args: unknown): Promise<ToolFailure | void>;
+  run(args: unknown, files?: ToolFile[], context?: ToolContext): Promise<ToolResult>;
 }
 
 export type ToolSection = { id: string; title: string };
-export type ToolGroup = { section: string; id: string; title: string };
+export type ToolGroup = { section: string; id: string; title: string; panel?: string; permissionNote?: string };

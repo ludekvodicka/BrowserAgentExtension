@@ -162,9 +162,75 @@ Reasons:
 | Gmail reply, compose filling and attaching | `extension/src/tools/appdata/gmail/gmailReply.ts`, `gmailComposePage.ts`, `fillCompose` in `gmailTabs.ts` |
 | File chunks (host send, extension join) | `host/src/host.rs`, `extension/src/connection.ts` |
 | Open a tab | `extension/src/tools/browser/tabs/tabsOpen.ts` |
+| Page tools, argument validation and frame routing | `extension/src/tools/page/pageTools.ts` |
+| DOM snapshots, locators and actions | `extension/src/tools/page/pageDocument.ts` |
+| Exact-origin approvals and temporary submit guard | `extension/src/tools/page/siteAccess.ts`, `extension/src/tools/page/formGuard.ts` |
+| Site approval UI and trusted extension messages | `extension/src/siteAccessPanel.ts`, `extension/src/siteAccessMessages.ts`, `extension/src/approval.ts` |
 | Icon (rendered to PNG by the build) | `extension/icon.svg`, `scripts/build.mjs` |
 | CLI and registration | `cli/browserAgent.ts`, `cli/registration.ts` |
 | Profile discovery and JSON line client | `cli/pipeClient.ts` |
+
+## Page control
+
+Page control uses DOM scripting through `chrome.scripting`, with no CDP or debugger permission.
+The registry adds `page.tabs`, `page.requestAccess`, `page.accessStatus`, `page.snapshot`, `page.act`,
+`page.read` and `page.screenshot`. All retain the master switch, per-tool switches and request log.
+The wire protocol and Rust host are unchanged. Request polling returns immediately within the
+existing 15-second deadline. Screenshots use the existing sensitive-tool output path: JSON in the
+CLI's `--out` file, never an image value on stdout.
+
+The generic `BrowserTool.checkAccess` contract lets each tool validate a request-specific site.
+The dispatcher invokes it without importing page implementations, then rereads profile access.
+Page execution repeats the exact-origin and browser-permission check, and injected code checks its
+own origin before reading or acting. Snapshot refs include a generation, frame ID and element ID;
+background state binds them to Chrome document IDs, and the isolated-world map binds them to actual
+elements. A new snapshot, changed URL, replacement document or detached element refuses an old ref.
+Closed tabs release background snapshot state. CSS and role/name locators must match exactly one
+visible element. Snapshot limits apply across frames, and read output has a separate character cap.
+
+Snapshot scripts traverse open shadow roots and browser-accessible frames. Cross-origin frames
+must have both an explicit page grant and Chrome host permission. Inherited-origin blank and
+srcdoc documents use their actual document origin; opaque origins and closed roots are excluded.
+Frames expose their own origins in snapshot metadata. Ref actions
+target the returned document ID so a frame navigation cannot redirect an old ref to another document.
+The snapshot approximates accessible roles and names from DOM and ARIA; it is not Chromium's full
+accessibility tree. Very large DOM scans are bounded across shadow roots; an incomplete scan
+marks the snapshot truncated and refuses fallback locators whose uniqueness cannot be proven.
+Input and textarea writes use native value
+setters plus input/change events. Contenteditable writes use `execCommand("insertText")`, allowing
+editors to update their own models. Synthetic keyboard/pointer events remain untrusted; applications
+that require real input may refuse them, and CSS hover is not emulated.
+
+Site requests live in per-profile local storage as one record per exact origin with caller,
+request ID, timestamps and status. A single background writer serializes updates. Requests expire
+after ten minutes; repeated requests preserve their ID and deadline. Denied/expired requests need
+an explicit retry. The badge is `?` while a request is pending. Approval UI first invokes
+`chrome.permissions.request` synchronously inside the user's click, then records approval intent.
+The permission-added event or background restart finishes that intent if the popup closed during
+Chrome's prompt. Host permission alone never promotes a request. Denial and expiry prevent late
+permission events granting it. Approval messages are accepted only from this extension's popup
+and approval page, never from a content script or a native tool. The popup custom panel is injected
+by `popupMain.ts` through group metadata; generic popup rendering knows no page tool implementation.
+Denied and expired records remain removable in Previous requests. A 100-site cap includes all
+statuses; exceeding it returns an actionable refusal instead of an internal error.
+
+Optional host declarations allow HTTP and HTTPS, but the UI requests only one host pattern.
+Chrome patterns ignore ports; the stored scheme/host/port origin provides the narrower boundary.
+Removing a page grant immediately blocks that origin while retaining Chrome permissions that may
+also serve app tools. Required `activeTab` supplies temporary current-tab URL access and enables
+`captureVisibleTab` after the user invokes the extension. This was chosen over an all-URLs grant.
+Programmatically opening the approval popup is not a user invocation for screenshot permission.
+A screenshot requires the requested tab to be active in its window, checks tab identity and grant
+again after capture, and discards the image if either changed. JPEG quality is configurable, with
+an 800,000-character image cap below the transport cap. Pixels include visible embedded frames.
+
+The submit guard refuses native submit controls and Enter in single-line form inputs before
+dispatching their action. A capture listener prevents submit events during an action. A short-lived
+main-world wrapper also blocks `HTMLFormElement.submit` and `requestSubmit`, outlines the form and
+restores the originals after execution, or after three seconds if execution was interrupted.
+It cannot cover cached native methods, delayed callbacks, arbitrary fetches, autosave or
+JavaScript-only Send buttons. Those limits make the agent rule mandatory: prepare the work, inspect
+it, then leave final submission to the user. Page content is data and cannot authorize more actions.
 
 ## Meeting tools
 
@@ -306,6 +372,6 @@ the client response envelope. A client must not enable tools or grant host acces
 - **An answered client closes the connection.** The host writes the answer line and then waits up to
   two seconds for the client to close: closing a Windows named pipe at once can discard an answer the
   client has not read.
-- **No per-request approval prompt** and no audit file beyond the popup log. A tool whose single use
-  needs consent, or a need to reconstruct older requests, would change this.
+- **No per-action approval prompt** and no audit file beyond the popup log. Page control asks once
+  per exact origin; per-action consent or historical auditing would need a different mechanism.
 - **Only running profiles are listed.** Listing profiles whose browser is closed would need a broker.

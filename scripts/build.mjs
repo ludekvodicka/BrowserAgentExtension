@@ -7,7 +7,7 @@ import sharp from "sharp";
 const root = new URL("../", import.meta.url);
 const output = new URL("dist/extension/", root);
 await mkdir(output, { recursive: true });
-await build({ entryPoints: ["background", "popup"].map(name => fileURLToPath(new URL(`extension/src/${name}.ts`, root))),
+await build({ entryPoints: Object.fromEntries(["background", "popup", "approval"].map(name => [name, fileURLToPath(new URL(`extension/src/${name === "popup" ? "popupMain" : name}.ts`, root))])),
   outdir: fileURLToPath(output), bundle: true, format: "iife", target: "chrome120", legalComments: "none",
   // A release download registers its own host binary; a checkout registers through the CLI.
   define: { REGISTRATION_COMMAND: JSON.stringify(process.env.BROWSER_AGENT_REGISTRATION
@@ -17,6 +17,7 @@ manifest.version = JSON.parse(await readFile(new URL("package.json", root), "utf
 manifest.action.default_popup = "popup.html";
 await writeFile(new URL("manifest.json", output), JSON.stringify(manifest, null, 2) + "\n");
 await copyFile(new URL("extension/popup.html", root), new URL("popup.html", output));
+await copyFile(new URL("extension/approval.html", root), new URL("approval.html", output));
 for (const size of [16, 32, 48, 128])
   await sharp(fileURLToPath(new URL("extension/icon.svg", root))).resize(size, size).png().toFile(fileURLToPath(new URL(`icon${size}.png`, output)));
 // Page scripts (`*Hook.ts` beside their tool) become standalone files that tools register by `hooks/<name>.js`.

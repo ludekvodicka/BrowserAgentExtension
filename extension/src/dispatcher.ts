@@ -52,7 +52,13 @@ export function createDispatcher(state: ProfileState, log: RequestLog, tools: re
           return refuse("permission_missing", `Enable ${tool.title} again and allow its site permission in the popup.`);
         if (request.files?.length && !tool.acceptsFiles)
           return refuse("tool_args_invalid", `${tool.title} takes no files; call it without --file.`);
-        const result = await tool.run(request.args, request.files ?? []);
+        const denied = await tool.checkAccess?.(request.args);
+        if (denied)
+          return refuse(denied.code, denied.message);
+        current = await state.read();
+        if (!current.agentAccess || !current.enabledTools.includes(tool.id))
+          return refuse(current.agentAccess ? "tool_denied" : "access_off", "Access was revoked before the tool started.");
+        const result = await tool.run(request.args, request.files ?? [], { caller: request.caller });
         if (result.ok)
           return finish({ id: request.id, ok: true, profile: profile(), value: result.value }, tool.quiet);
         else if (result.ok === false)

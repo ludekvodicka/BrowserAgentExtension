@@ -5,7 +5,6 @@ import { ProfileState } from "./profileState.ts";
 import type { RequestLogEntry } from "./requestLog.ts";
 import type { ToolGroup, ToolSection } from "./tools/browserTool.ts";
 
-declare const REGISTRATION_COMMAND: string;
 export type PopupData = { profile: ProfileInfo; sections: ToolSection[]; groups: ToolGroup[]; connection: ConnectionStatus; log: RequestLogEntry[] };
 
 function renderConnection(document: Document, status: ConnectionStatus): void {
@@ -72,6 +71,11 @@ export function renderTools(document: Document, data: PopupData, grants: Grants,
       panel.id = `tab-${name}`;
       panel.setAttribute("role", "tabpanel");
       panel.hidden = true;
+      if (group.panel) {
+        const custom = document.createElement("div");
+        custom.dataset.panel = group.panel;
+        panel.append(custom);
+      }
       const heading = document.createElement("p");
       heading.className = "muted";
       heading.textContent = `${section.title} · ${group.title}`;
@@ -87,7 +91,7 @@ export function renderTools(document: Document, data: PopupData, grants: Grants,
         label.append(toggle, document.createTextNode(tool.title));
         const hosts = document.createElement("p");
         hosts.className = "hosts muted";
-        hosts.textContent = tool.hosts.join(", ") || "No website permission required";
+        hosts.textContent = tool.hosts.join(", ") || group.permissionNote || "No website permission required";
         row.append(label, hosts);
         panel.append(row);
         toggle.addEventListener("change", () => {
@@ -130,7 +134,8 @@ function renderRequests(document: Document, log: RequestLogEntry[]): void {
 
 export async function mountPopup(document: Document, runtime: Pick<typeof chrome.runtime, "sendMessage">,
   storage: Pick<typeof chrome.storage.local, "get" | "set">,
-  permissions: Pick<typeof chrome.permissions, "request" | "remove" | "contains">, registrationCommand: string): Promise<void> {
+  permissions: Pick<typeof chrome.permissions, "request" | "remove" | "contains">, registrationCommand: string,
+  panels: Record<string, (container: HTMLElement) => Promise<void>> = {}): Promise<void> {
   const data: PopupData = await runtime.sendMessage({ op: "popup" });
   if (!data?.profile)
     throw new Error("Cannot read the profile. Reload the extension.");
@@ -170,8 +175,10 @@ export async function mountPopup(document: Document, runtime: Pick<typeof chrome
   summary();
   for (const tab of document.querySelectorAll<HTMLButtonElement>("#tabs [role=tab]"))
     tab.addEventListener("click", () => selectTab(document, tab.dataset.tab!));
+  for (const container of document.querySelectorAll<HTMLElement>("[data-panel]")) {
+    const mount = panels[container.dataset.panel!];
+    if (!mount)
+      throw new Error("No renderer registered for this tool group's panel.");
+    await mount(container);
+  }
 }
-
-if (typeof document !== "undefined" && typeof chrome !== "undefined")
-  void mountPopup(document, chrome.runtime, chrome.storage.local, chrome.permissions, REGISTRATION_COMMAND)
-    .catch(() => { document.getElementById("message")!.textContent = "Cannot read this profile. Reload Browser Agent in this browser."; });

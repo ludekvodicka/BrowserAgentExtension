@@ -80,7 +80,7 @@ it("passes files only to a tool that accepts them", async () => {
   Object.assign(s.tool, { acceptsFiles: true });
   expect(await s.dispatch({ ...s.request, files })).toMatchObject({ ok: true });
   expect(await s.dispatch(s.request)).toMatchObject({ ok: true });
-  expect(vi.mocked(s.tool.run).mock.calls).toEqual([[undefined, files], [undefined, []]]);
+  expect(vi.mocked(s.tool.run).mock.calls).toEqual([[undefined, files, { caller: "test" }], [undefined, [], { caller: "test" }]]);
 });
 
 it("keeps quiet successes out of the log but records refusals including oversized successes", async () => {

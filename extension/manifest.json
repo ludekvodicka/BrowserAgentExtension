@@ -9,10 +9,11 @@
     "cookies",
     "alarms",
     "scripting",
+    "activeTab",
     "downloads"
   ],
   "optional_host_permissions": ["https://*.slack.com/*", "https://outlook.cloud.microsoft/*", "https://mail.google.com/*",
-    "https://meet.google.com/*", "https://*.zoom.us/*", "https://teams.microsoft.com/*", "https://teams.cloud.microsoft/*"],
+    "https://meet.google.com/*", "https://*.zoom.us/*", "https://teams.microsoft.com/*", "https://teams.cloud.microsoft/*", "https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background.js"
   },

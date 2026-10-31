@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Agent: Page control</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+    body { max-width: 560px; margin: 32px auto; padding: 0 16px; overflow-wrap: anywhere; }
+    h1 { font-size: 22px; } h2 { font-size: 16px; }
+    .tool { padding: 12px 0; border-bottom: 1px solid #8885; }
+    .muted { opacity: .75; } button { padding: 6px 12px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Page control</h1>
+  <p>Approve only websites you want the agent to read and operate. Agent access and the page tool switches in the extension popup must also be on.</p>
+  <div id="sites"></div>
+  <p id="message" role="status"></p>
+  <script src="approval.js"></script>
+</body>
+</html>

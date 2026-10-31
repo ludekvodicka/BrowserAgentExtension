@@ -51,11 +51,14 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
     editor = await wait(() => editors().find(element => !before.has(element)), 4000);
     // The reply's recipients are chips (div.afV, address in data-hovercard-id) above its body, hidden while collapsed;
     // the nearest ancestor of the body that holds chips is that reply's own recipient area.
-    let scope: HTMLElement | null = editor;
-    while (scope && !scope.querySelector("div.afV"))
-      scope = scope.parentElement;
-    const recipients = [...scope?.querySelectorAll("div.afV") ?? []].map(chip => (chip.getAttribute("data-hovercard-id") ?? chip.getAttribute("email") ?? "").toLowerCase());
-    if (editor && !recipients.includes(target))
+    // Gmail adds the chips a moment after the body appears, so they are awaited.
+    const recipients = () => {
+      let scope: HTMLElement | null = editor;
+      while (scope && !scope.querySelector("div.afV"))
+        scope = scope.parentElement;
+      return [...scope?.querySelectorAll("div.afV") ?? []].map(chip => (chip.getAttribute("data-hovercard-id") ?? chip.getAttribute("email") ?? "").toLowerCase());
+    };
+    if (editor && !await wait(() => recipients().includes(target) || null, 3000))
       return { kind: "other_recipient" };
   } else if (reply) {
     // The reply links below the open conversation keep these class names in every display language.
