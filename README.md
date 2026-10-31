@@ -26,7 +26,7 @@ the agent must leave the final Send or Submit to you.
 | Browser | Open a web page | A page opened in a new tab of the profile, for you to look at |
 | Meetings | Google Meet, Zoom, Teams | The meeting tabs open in the profile, so a recorder can offer to record the call |
 | Page control | Request site access and check its status | A request you approve or deny in the extension, with the exact website address and caller |
-| Page control | List, inspect, read and operate approved pages | Element refs, page text or limited HTML, clicks and field edits, without final submission |
+| Page control | List, inspect, read and operate approved pages | Page text, buttons and fields; clicks, typing and choices on sites you approved. You press the final send |
 | Page control | Screenshot | The visible active tab, written only to the agent's output file after you click the extension icon on that tab |
 
 The Meetings tools are what [Meeting Recorder](https://github.com/ludekvodicka/MeetingRecorder) uses to
@@ -68,35 +68,73 @@ profile when you ask the agent for something, such as "read the Slack thread in 
 
 ## Page control
 
+Page control lets the agent work on a website you have open, the way you would: read the page,
+press buttons, fill fields and choose options. You ask in plain words, for example "in my work
+profile, open a comment on the support ticket I have open and write that we are working on it",
+and the agent prepares it. You read the result and press the final button yourself.
+
 <p align="center">
   <img src="docs/images/popup-page-control.png" width="380" alt="Page control tab with a pending site request, a granted site and the page tools">
 </p>
 
-On the **Page control** tab, enable the page tools you want to use, including Request access and
-Check approval status. Agent access must also be on. Click **Allow this site** while the website is
-open, or ask the agent to request its URL. The extension shows a **?** badge and an approval panel
-with the caller and exact origin: scheme, hostname (international names use punycode) and port.
-Click **Approve** and accept the browser's site permission, or **Deny**. If the browser cannot open
-the popup automatically, a separate extension approval page opens. Requests expire after ten minutes.
-Denied and expired entries are listed under **Previous requests**, where you can remove them.
-At the 100-site limit, remove an old request or grant before adding another site.
+### An example: replying on a support forum
 
-An approval covers one exact origin in this profile. **Remove** stops page tools using that origin;
-browser permissions shared with other tools are retained. Chrome host permissions do not distinguish
-ports, so the extension checks the exact origin again on every page operation. Only approved tabs
-appear in `page.tabs`. The agent cannot approve requests or turn its tools on.
+1. You have a support question open in Chrome and ask the agent to reply that you are working on it.
+2. The agent asks for access to that website. The Browser Agent icon shows **?** and the popup
+   shows the exact address and who asks. You click **Approve** once; the browser confirms the site.
+3. The agent reads the question, finds the **comment** button and presses it. The comment editor opens.
+4. The agent types the reply into the editor and checks that the text is there.
+5. The agent stops and tells you that the draft is ready. You read it and click **Add comment**,
+   or **Cancel**.
 
-The agent takes a snapshot, uses its element refs to open a comment editor and fill it, then takes
-another snapshot to verify the draft. Old refs are rejected after a new snapshot or navigation.
-Open shadow DOM and accessible frames are included; each cross-origin frame needs its own approval.
-Closed shadow roots, canvas controls and browser-internal pages are unavailable. Some sites require
-trusted mouse or keyboard input and will not respond to these DOM actions.
+The next time you ask for that website, step 2 is skipped: the approval stays until you remove it.
 
-**You submit the result.** The agent may press any control a task needs: a "comment" button that
-opens an editor, tabs, menus, show more. It stops before the button that sends or saves the data,
-such as Send, Post, Add comment, Save, Pay or Submit, leaves the draft open and tells you which
-button to press. The extension does not enforce this: many sites build their open and their send
-buttons the same way, so no technical check can tell them apart reliably. The rule is part of the
+### What the agent can do on an approved page
+
+- **Read** the page text, the state of fields, checkboxes and selections, and the buttons and links
+  that are there.
+- **Operate controls** that a task needs: buttons that open an editor or a dialog, tabs, menus,
+  "show more", paging, links on the same site.
+- **Fill in** text fields and rich text editors, choose options, tick checkboxes, press keys such
+  as Tab or Escape, scroll.
+- **Take a screenshot** of the visible tab into a file, after you click the Browser Agent icon on
+  that tab (optional switch).
+
+It cannot work on a site you have not approved, on browser pages such as `chrome://`, inside
+closed web components or canvas drawings, or on sites that accept only real mouse and keyboard
+input. In those cases it says so instead of pretending the work is done.
+
+### What the switches allow
+
+The switches on the Page control tab choose **what** the agent may do. **Where** it may do it is
+the list of approved sites above them. Both are needed, and Agent access must be on.
+
+| Switch | What it allows on approved sites |
+|---|---|
+| List tabs on approved sites | See the address and title of your open tabs on approved sites, and nothing about other tabs |
+| Request access to a site | Ask you to approve a new site; only you can approve |
+| Check site approval status | See whether you approved, denied or have not answered yet |
+| Inspect page elements | See the buttons, links and fields of a page with their labels and current values, including what is typed in forms |
+| Read page text or HTML | Read everything the page shows you |
+| Prepare work on the page | Click, type, choose options, tick boxes, press keys and scroll |
+| Capture the visible page | Save a screenshot of the visible tab into a file, after you click the extension icon on that tab |
+
+### Approving and removing sites
+
+- **Approve when asked:** the agent requests a site; you click **Approve** or **Deny** in the popup.
+  If the popup cannot open by itself, an approval page opens in a new tab. A request expires after
+  ten minutes.
+- **Approve yourself:** open the website, open the popup and click **Allow this site**.
+- **An approval is exact:** `https://support.example.com` does not cover `https://example.com` or
+  another subdomain. A frame from another site inside the page needs its own approval.
+- **Remove** under Granted sites ends the agent's access to that site at once. Denied and expired
+  requests are listed under **Previous requests**, where you can remove them. Up to 100 sites fit.
+
+**You submit the result.** The agent may press any control a task needs, such as a "comment" button
+that opens an editor. It stops before the button that sends or saves your data: Send, Post, Add
+comment, Save, Pay, Submit or similar, leaves the draft open and tells you which button to press.
+The extension does not enforce this, because many sites build their "open editor" and "send"
+buttons the same way and no technical check can tell them apart reliably. The rule is part of the
 agent's instructions.
 
 **Privacy:** granting a site gives the agent the power of your signed-in session there. Text and
@@ -105,6 +143,8 @@ instructions to the agent. The request log stores only time, tool, caller and ou
 includes everything visible in the tab, including embedded frames, and only goes to `--out`.
 For screenshots, select the tab and click the extension icon first. The temporary `activeTab` grant
 ends when that tab navigates to another origin or closes. No all-sites grant or debugger access is used.
+
+### Page control from the command line
 
 ```sh
 node cli/browserAgent.ts call work page.requestAccess --args '{"url":"https://support.example/ticket/42"}' --caller codex
