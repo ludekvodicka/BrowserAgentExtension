@@ -56,7 +56,7 @@ export async function mountSiteAccess(document: Document, container: HTMLElement
     container.replaceChildren();
     const info = document.createElement("p");
     info.className = "muted";
-    info.textContent = "Approved sites let enabled page tools read and act as you. Review drafts and click the final Send yourself.";
+    info.textContent = "The switches below choose what the agent may do, and it may do it only on the approved sites listed here. It can press buttons that open or switch things; the final Send stays with you.";
     container.append(info);
     for (const site of data.sites.filter(site => site.status === "pending_approval")) {
       const row = document.createElement("div");

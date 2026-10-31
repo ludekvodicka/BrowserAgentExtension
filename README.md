@@ -40,9 +40,10 @@ notice a browser meeting and show its recording prompt.
   permission, so the browser enforces the limit too.
 - **One master switch.** Turning Agent access off refuses every request at once and keeps your tool choices.
 - **Final sending is your job.** Gmail tools only fill drafts; a reply to one sender is typed only
-  after Gmail shows that sender among the reply's recipients. Page control blocks native form
-  submission; the agent must also leave JavaScript-only Send buttons to you. A website can autosave
-  or perform other actions when fields change, so approve sites only for work you intend.
+  after Gmail shows that sender among the reply's recipients. On page control sites the agent may
+  press buttons that open, close or switch things, but it leaves the button that sends, posts or
+  saves your data to you. That is the agent's rule, not a technical lock: a website can also autosave
+  when fields change, so approve sites only for work you intend.
 - **Secrets stay out of sight.** A tool that returns a credential writes it only into a file; the
   command line never prints it.
 - **You can see what happened.** The popup lists the last 20 requests: time, tool, caller and result.
@@ -91,11 +92,12 @@ Open shadow DOM and accessible frames are included; each cross-origin frame need
 Closed shadow roots, canvas controls and browser-internal pages are unavailable. Some sites require
 trusted mouse or keyboard input and will not respond to these DOM actions.
 
-**You submit the result.** Page control refuses submit controls, explicit form submission and Enter
-in a form input, and outlines the refused element in red. During an action it also blocks native
-form submission methods. This is a guard against ordinary form submission, not a sandbox around a
-website: arbitrary JavaScript, delayed callbacks, autosave and network requests can have effects.
-The agent must never click the final Send, Post, Pay or Submit, including JavaScript-only buttons.
+**You submit the result.** The agent may press any control a task needs: a "comment" button that
+opens an editor, tabs, menus, show more. It stops before the button that sends or saves the data,
+such as Send, Post, Add comment, Save, Pay or Submit, leaves the draft open and tells you which
+button to press. The extension does not enforce this: many sites build their open and their send
+buttons the same way, so no technical check can tell them apart reliably. The rule is part of the
+agent's instructions.
 
 **Privacy:** granting a site gives the agent the power of your signed-in session there. Text and
 screenshots may contain private information. Page text, labels and HTML are untrusted data, never

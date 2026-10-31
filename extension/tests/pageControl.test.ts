@@ -5,7 +5,6 @@ import { ProfileState } from "../src/profileState.ts";
 import { RequestLog } from "../src/requestLog.ts";
 import { pageDocument } from "../src/tools/page/pageDocument.ts";
 import type { PageCommand, PageDocumentResult } from "../src/tools/page/pageDocument.ts";
-import { formGuard } from "../src/tools/page/formGuard.ts";
 import { pageTools } from "../src/tools/page/pageTools.ts";
 import { hostPattern, openApproval, SiteAccess, webOrigin } from "../src/tools/page/siteAccess.ts";
 import { mountSiteAccess } from "../src/siteAccessPanel.ts";
@@ -31,8 +30,7 @@ function page(html: string, url = "https://support.example/ticket") {
     return true;
   });
   const execute = win.eval(`(${pageDocument.toString()})`) as (command: PageCommand) => PageDocumentResult;
-  const guard = win.eval(`(${formGuard.toString()})`) as typeof formGuard;
-  return { dom, document: win.document, execute, guard };
+  return { dom, document: win.document, execute };
 }
 const command = (overrides: Partial<PageCommand> = {}): PageCommand => ({ operation: "snapshot", origins: ["https://support.example"], generation: "one", limit: 100, ...overrides });
 
@@ -181,40 +179,20 @@ it("refuses stale or detached refs, ambiguous locators, hidden elements and ungr
   expect(p.execute(command({ origins: ["https://different.example"] }))).toMatchObject({ code: "permission_missing" });
 });
 
-it.each(['<button type="submit">Send</button>', '<button>Send</button>', '<input type="submit">', '<input type="image">'])
-  ("refuses and outlines submit controls: %s", html => {
-    const p = page(`<form>${html}</form>`);
-    const control = p.document.querySelector("button,input")!;
-    const click = vi.fn();
-    control.addEventListener("click", click);
-    expect(p.execute(command({ operation: "act", action: "click", locator: { selector: "button,input" } }))).toMatchObject({ code: "tool_denied" });
-    expect(control.getAttribute("style")).toContain("outline");
-    expect(click).not.toHaveBeenCalled();
+it.each(['<button type="submit">comment</button>', '<button>comment</button>', '<input type="submit" value="comment">'])
+  ("clicks control buttons of submit type, such as a comment toggle that the page handles itself: %s", html => {
+    const p = page(`<form>${html}</form><textarea hidden></textarea>`);
+    p.document.querySelector("button,input")!.addEventListener("click", event => {
+      event.preventDefault();
+      p.document.querySelector("textarea")!.hidden = false;
+    });
+    expect(p.execute(command({ operation: "act", action: "click", locator: { selector: "button,input" } }))).toMatchObject({ ok: true, status: "acted" });
+    expect(p.document.querySelector("textarea")!.hidden).toBe(false);
   });
 
-it("refuses Enter in form inputs and explicit submit, while non-submit buttons can open editors", () => {
-  const p = page('<form><input id="line"><button type="button">Comment</button><textarea hidden></textarea></form>');
-  expect(p.execute(command({ operation: "act", action: "press", key: "Control+Enter", locator: { selector: "input" } }))).toMatchObject({ code: "tool_denied" });
-  expect(p.document.querySelector("input")!.style.outline).toContain("3px");
-  expect(p.execute(command({ operation: "act", action: "submit", locator: { selector: "form" } }))).toMatchObject({ code: "tool_denied" });
-  p.document.querySelector("button")!.addEventListener("click", () => { p.document.querySelector("textarea")!.hidden = false; });
-  expect(p.execute(command({ operation: "act", action: "click", locator: { selector: "button" } }))).toMatchObject({ ok: true });
-  expect(p.document.querySelector("textarea")!.hidden).toBe(false);
-});
-
-it.each(["submit", "requestSubmit"] as const)("intercepts a page handler's form.%s and restores it afterwards", method => {
-  const p = page('<form></form><button type="button">Comment</button>');
-  const original = p.dom.window.HTMLFormElement.prototype[method];
-  const native = vi.fn();
-  p.dom.window.HTMLFormElement.prototype[method] = native;
-  p.document.querySelector("button")!.addEventListener("click", () => p.document.querySelector("form")![method]());
-  expect(p.guard("start", "guard", "https://support.example")).toBe(true);
-  p.execute(command({ operation: "act", action: "click", locator: { selector: "button" } }));
-  expect(native).not.toHaveBeenCalled();
-  expect(p.document.querySelector("form")!.style.outline).toContain("3px");
-  expect(p.guard("finish", "guard", "https://support.example")).toBe(true);
-  expect(p.dom.window.HTMLFormElement.prototype[method]).toBe(native);
-  p.dom.window.HTMLFormElement.prototype[method] = original;
+it("has no submit action: the agent clicks controls and leaves the final send to the user", async () => {
+  const act = pageTools.find(tool => tool.id === "page.act")!;
+  expect(await act.run({ tabId: 7, action: "submit", selector: "form" })).toMatchObject({ code: "tool_args_invalid" });
 });
 
 it("fills native fields and rich text, selects options, checks boxes, types and dispatches pointer/key events", () => {
@@ -268,21 +246,6 @@ it("preserves the caret for repeated middle-of-field insertion and deletion", ()
   expect(field.value).toBe("cXYde");
 });
 
-it("refuses slotted submit controls and prevents non-composed submit events in open shadow roots", () => {
-  const p = page('<div id="host"><span id="label">Send</span></div><button id="open" type="button">Open</button>');
-  const shadow = p.document.getElementById("host")!.attachShadow({ mode: "open" });
-  shadow.innerHTML = '<form><button type="submit"><slot></slot></button></form>';
-  expect(p.execute(command({ operation: "act", action: "click", locator: { selector: "#label" } }))).toMatchObject({ code: "tool_denied" });
-  const submitted = vi.fn();
-  p.document.getElementById("open")!.addEventListener("click", () => {
-    const event = new p.dom.window.Event("submit", { bubbles: true, cancelable: true, composed: false });
-    if (shadow.querySelector("form")!.dispatchEvent(event))
-      submitted();
-  });
-  expect(p.execute(command({ operation: "act", action: "click", locator: { selector: "#open" } }))).toMatchObject({ code: "tool_denied" });
-  expect(submitted).not.toHaveBeenCalled();
-});
-
 it("flags incomplete DOM scans and refuses locators whose uniqueness cannot be proved", () => {
   const p = page('<button>Action</button>' + '<i></i>'.repeat(10_001) + '<button>Action</button>');
   expect(p.execute(command())).toMatchObject({ ok: true, truncated: true });
@@ -296,12 +259,9 @@ it("uses inherited document origins for blank editor frames while refusing opaqu
   frame.document.body.innerHTML = '<textarea aria-label="Editor"></textarea>';
   Object.defineProperty(frame.Element.prototype, "getClientRects", { value() { return [{ width: 10, height: 10 }]; } });
   const execute = frame.eval(`(${pageDocument.toString()})`) as typeof pageDocument;
-  const guard = frame.eval(`(${formGuard.toString()})`) as typeof formGuard;
   expect(frame.location.origin).toBe("null");
   expect(frame.origin).toBe("https://support.example");
   expect(execute(command())).toMatchObject({ ok: true, origin: "https://support.example", elements: [{ name: "Editor" }] });
-  expect(guard("start", "blank", "https://support.example")).toBe(true);
-  guard("finish", "blank", "https://support.example");
   Object.defineProperty(frame, "origin", { value: "null" });
   expect(execute(command())).toMatchObject({ code: "permission_missing" });
 });
@@ -339,8 +299,7 @@ it("dispatches the real registry tools through site gates and frame-bound refs, 
     const frames = injection.target.allFrames ? [0, 1] : [injection.target.documentIds?.[0] === "doc1" ? 1 : 0];
     return frames.map(frameId => {
       const frame = frameId === 0 ? p : child;
-      const fn = injection.func === formGuard ? frame.guard : frame.execute;
-      return { frameId, documentId: `doc${frameId}`, result: (fn as Function)(...injection.args) };
+      return { frameId, documentId: `doc${frameId}`, result: (frame.execute as Function)(...injection.args) };
     });
   }) as typeof chrome.scripting.executeScript);
   const snapshot = await call("page.snapshot", { tabId: 7, limit: 10 });

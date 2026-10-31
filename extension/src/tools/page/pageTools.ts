@@ -1,6 +1,5 @@
 import { isRecord } from "../../../../shared/protocol.ts";
 import type { BrowserTool, ToolFailure, ToolResult } from "../browserTool.ts";
-import { formGuard } from "./formGuard.ts";
 import { pageDocument } from "./pageDocument.ts";
 import type { PageAction, PageCommand, PageLocator } from "./pageDocument.ts";
 import { openApproval, siteAccess, SiteCapacityError, webOrigin } from "./siteAccess.ts";
@@ -106,8 +105,8 @@ function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string
         command.x = args.x as number | undefined;
         command.y = args.y as number | undefined;
         break;
-      case "click": case "hover": case "submit": break;
-      default: return invalid("Unknown action. Use click, fill, type, select, check, press, scroll or hover. Submission stays with the user.");
+      case "click": case "hover": break;
+      default: return invalid("Unknown action. Use click, fill, type, select, check, press, scroll or hover.");
     }
   } else throw new Error("Unknown page operation.");
   return command;
@@ -174,24 +173,7 @@ async function runDocument(operation: "snapshot" | "read" | "act", args: unknown
       return denied;
     command.origins = [frameOrigin];
     const target = frame && (command.locator?.ref || frameId !== 0) ? { tabId, documentIds: [frame.documentId] } : { tabId, frameIds: [0] };
-    const guardId = crypto.randomUUID();
-    if (operation === "act") {
-      const [guard] = await chrome.scripting.executeScript({ target, world: "MAIN", func: formGuard, args: ["start", guardId, frameOrigin] });
-      if (!guard?.result)
-        return missing("Could not install the form submission guard; no action ran.");
-    }
-    let result;
-    let blocked = false;
-    try {
-      [result] = await chrome.scripting.executeScript({ target, func: pageDocument, args: [command] });
-    } finally {
-      if (operation === "act") {
-        const [guard] = await chrome.scripting.executeScript({ target, world: "MAIN", func: formGuard, args: ["finish", guardId, frameOrigin] }).catch(() => []);
-        blocked = guard?.result === true;
-      }
-    }
-    if (blocked)
-      return { ok: false, code: "tool_denied", message: "The page tried to submit a form. Submission was blocked and outlined; the user must submit." };
+    const [result] = await chrome.scripting.executeScript({ target, func: pageDocument, args: [command] });
     if (!result?.result)
       return missing("The document changed during the operation. Inspect it before trying again.");
     if (!result.result.ok)

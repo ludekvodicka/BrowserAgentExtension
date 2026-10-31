@@ -1,5 +1,5 @@
 export type PageLocator = { ref?: string; selector?: string; role?: string; name?: string };
-export type PageAction = "click" | "fill" | "type" | "select" | "check" | "press" | "scroll" | "hover" | "submit";
+export type PageAction = "click" | "fill" | "type" | "select" | "check" | "press" | "scroll" | "hover";
 export type PageCommand = { operation: "snapshot" | "read" | "act"; origins: string[]; generation: string; limit: number;
   locator?: PageLocator; action?: PageAction; text?: string; values?: string[]; checked?: boolean; key?: string;
   x?: number; y?: number; format?: "text" | "html" };
@@ -80,26 +80,6 @@ export function pageDocument(command: PageCommand): PageDocumentResult {
     return normalize(labelled || element.getAttribute("aria-label") || (labels?.length ? [...labels].map(label => label.textContent).join(" ") : "")
       || element.getAttribute("alt") || (element instanceof HTMLInputElement && ["button", "submit", "reset"].includes(element.type) ? element.value : "")
       || (role(element) === "textbox" ? "" : element.textContent) || element.getAttribute("title") || element.getAttribute("placeholder") || "").slice(0, 300);
-  }
-  function outline(element: Element): PageDocumentResult {
-    if (element instanceof HTMLElement)
-      element.style.outline = "3px solid #dc2626";
-    return fail("tool_denied", "Final form submission is reserved for the user. The control is outlined; ask the user to submit.");
-  }
-  function submitControl(element: Element): Element | null {
-    let current: Element | null = element;
-    while (current) {
-      if (current instanceof HTMLButtonElement && current.type === "submit" && (current.form || current.hasAttribute("type"))
-        || current instanceof HTMLInputElement && ["submit", "image"].includes(current.type))
-        return current;
-      if (current instanceof HTMLLabelElement && current.control && current.control !== element) {
-        const control = submitControl(current.control);
-        if (control)
-          return control;
-      }
-      current = current.assignedSlot ?? current.parentElement ?? (current.getRootNode() as ShadowRoot).host ?? null;
-    }
-    return null;
   }
 
   if (command.operation === "snapshot") {
@@ -197,11 +177,6 @@ export function pageDocument(command: PageCommand): PageDocumentResult {
 
   if (!(target instanceof HTMLElement) || target.matches(":disabled") || target.getAttribute("aria-disabled") === "true")
     return fail("tab_not_ready", "The element cannot be operated or is disabled.");
-  const submit = submitControl(target);
-  if (command.action === "submit" || (command.action === "click" || command.action === "press") && submit)
-    return outline(submit ?? target);
-  if (command.action === "press" && command.key?.split("+").at(-1) === "Enter" && target instanceof HTMLInputElement && target.form)
-    return outline(target);
 
   function insert(text: string, replace: boolean): boolean {
     target!.scrollIntoView?.({ block: "nearest" });
@@ -232,99 +207,78 @@ export function pageDocument(command: PageCommand): PageDocumentResult {
     }
     return false;
   }
-  let blocked: Element | undefined;
-  const preventSubmit = (event: Event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    blocked = event.target instanceof Element ? event.target : target;
-    outline(blocked!);
-  };
-  const submitRoots: (Document | ShadowRoot)[] = [document];
-  const targetRoot = target.getRootNode();
-  if (targetRoot instanceof ShadowRoot)
-    submitRoots.push(targetRoot);
-  for (const element of scan(document).elements)
-    if (element.shadowRoot && !submitRoots.includes(element.shadowRoot))
-      submitRoots.push(element.shadowRoot);
-  for (const root of submitRoots)
-    root.addEventListener("submit", preventSubmit, true);
-  try {
-    switch (command.action) {
-      case "click": target.click(); break;
-      case "fill": case "type":
-        if (!insert(command.text!, command.action === "fill"))
-          return fail("tab_not_ready", "This is not an editable text field, or the editor refused text insertion.");
-        break;
-      case "select":
-        if (!(target instanceof HTMLSelectElement) || !target.multiple && command.values!.length !== 1)
-          return fail("tool_args_invalid", "Select needs a select element and one value unless it allows multiple values.");
-        if (command.values!.some(value => ![...target.options].some(option => option.value === value && !option.disabled)))
-          return fail("tool_args_invalid", "A requested option is absent or disabled.");
-        for (const option of target.options)
-          option.selected = command.values!.includes(option.value);
-        target.dispatchEvent(new Event("input", { bubbles: true }));
-        target.dispatchEvent(new Event("change", { bubbles: true }));
-        break;
-      case "check":
-        if (!(target instanceof HTMLInputElement) || !["checkbox", "radio"].includes(target.type) || target.type === "radio" && !command.checked)
-          return fail("tool_args_invalid", "Check needs a checkbox, or a radio with checked:true.");
-        if (target.checked !== command.checked)
-          target.click();
-        if (target.checked !== command.checked)
-          return fail("tab_not_ready", "The page did not accept the checked state.");
-        break;
-      case "press": {
-        target.focus();
-        const parts = command.key!.split("+");
-        const key = parts.at(-1)!;
-        const options = { key, bubbles: true, composed: true, cancelable: true, ctrlKey: parts.includes("Control"),
-          metaKey: parts.includes("Meta"), altKey: parts.includes("Alt"), shiftKey: parts.includes("Shift") };
-        const accepted = target.dispatchEvent(new KeyboardEvent("keydown", options));
-        if (accepted && (key === "Enter" || key === " ") && (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement))
-          target.click();
-        else if (accepted && key === "Enter" && (target instanceof HTMLTextAreaElement || target.isContentEditable))
-          insert("\n", false);
-        else if (accepted && key.toLowerCase() === "a" && (options.ctrlKey || options.metaKey) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement))
-          target.select();
-        else if (accepted && ["Backspace", "Delete"].includes(key) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-          const start = target.selectionStart;
-          const end = target.selectionEnd;
-          if (start !== null && end !== null) {
-            target.setSelectionRange(start === end && key === "Backspace" ? Math.max(0, start - 1) : start,
-              start === end && key === "Delete" ? Math.min(target.value.length, end + 1) : end);
-            insert("", false);
-          }
-        } else if (accepted && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(key) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-          const start = target.selectionStart;
-          if (start !== null) {
-            const position = key === "Home" ? 0 : key === "End" ? target.value.length : Math.max(0, Math.min(target.value.length, start + (key === "ArrowLeft" ? -1 : 1)));
-            target.setSelectionRange(options.shiftKey ? start : position, position);
-          }
-        } else if (accepted && key === "Tab") {
-          const focusable = scan(document).elements.filter(element => element instanceof HTMLElement && element.tabIndex >= 0 && visible(element) && !element.matches(":disabled"));
-          const index = focusable.indexOf(target);
-          (focusable[(index + (options.shiftKey ? -1 : 1) + focusable.length) % focusable.length] as HTMLElement | undefined)?.focus();
+  switch (command.action) {
+    case "click": target.click(); break;
+    case "fill": case "type":
+      if (!insert(command.text!, command.action === "fill"))
+        return fail("tab_not_ready", "This is not an editable text field, or the editor refused text insertion.");
+      break;
+    case "select":
+      if (!(target instanceof HTMLSelectElement) || !target.multiple && command.values!.length !== 1)
+        return fail("tool_args_invalid", "Select needs a select element and one value unless it allows multiple values.");
+      if (command.values!.some(value => ![...target.options].some(option => option.value === value && !option.disabled)))
+        return fail("tool_args_invalid", "A requested option is absent or disabled.");
+      for (const option of target.options)
+        option.selected = command.values!.includes(option.value);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      break;
+    case "check":
+      if (!(target instanceof HTMLInputElement) || !["checkbox", "radio"].includes(target.type) || target.type === "radio" && !command.checked)
+        return fail("tool_args_invalid", "Check needs a checkbox, or a radio with checked:true.");
+      if (target.checked !== command.checked)
+        target.click();
+      if (target.checked !== command.checked)
+        return fail("tab_not_ready", "The page did not accept the checked state.");
+      break;
+    case "press": {
+      target.focus();
+      const parts = command.key!.split("+");
+      const key = parts.at(-1)!;
+      const options = { key, bubbles: true, composed: true, cancelable: true, ctrlKey: parts.includes("Control"),
+        metaKey: parts.includes("Meta"), altKey: parts.includes("Alt"), shiftKey: parts.includes("Shift") };
+      const accepted = target.dispatchEvent(new KeyboardEvent("keydown", options));
+      if (accepted && (key === "Enter" || key === " ") && (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement))
+        target.click();
+      else if (accepted && key === "Enter" && (target instanceof HTMLTextAreaElement || target.isContentEditable))
+        insert("\n", false);
+      else if (accepted && key.toLowerCase() === "a" && (options.ctrlKey || options.metaKey) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement))
+        target.select();
+      else if (accepted && ["Backspace", "Delete"].includes(key) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+        const start = target.selectionStart;
+        const end = target.selectionEnd;
+        if (start !== null && end !== null) {
+          target.setSelectionRange(start === end && key === "Backspace" ? Math.max(0, start - 1) : start,
+            start === end && key === "Delete" ? Math.min(target.value.length, end + 1) : end);
+          insert("", false);
         }
-        else if (accepted && key.length === 1 && !options.ctrlKey && !options.metaKey && !options.altKey)
-          insert(key, false);
-        target.dispatchEvent(new KeyboardEvent("keyup", options));
-        break;
+      } else if (accepted && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(key) && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+        const start = target.selectionStart;
+        if (start !== null) {
+          const position = key === "Home" ? 0 : key === "End" ? target.value.length : Math.max(0, Math.min(target.value.length, start + (key === "ArrowLeft" ? -1 : 1)));
+          target.setSelectionRange(options.shiftKey ? start : position, position);
+        }
+      } else if (accepted && key === "Tab") {
+        const focusable = scan(document).elements.filter(element => element instanceof HTMLElement && element.tabIndex >= 0 && visible(element) && !element.matches(":disabled"));
+        const index = focusable.indexOf(target);
+        (focusable[(index + (options.shiftKey ? -1 : 1) + focusable.length) % focusable.length] as HTMLElement | undefined)?.focus();
       }
-      case "scroll":
-        if (locator)
-          target.scrollBy({ left: command.x ?? 0, top: command.y ?? 0, behavior: "instant" });
-        else window.scrollBy({ left: command.x ?? 0, top: command.y ?? 0, behavior: "instant" });
-        break;
-      case "hover":
-        target.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, composed: true, pointerType: "mouse" }));
-        target.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true }));
-        target.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
-        break;
-      default: throw new Error("Unknown page action.");
+      else if (accepted && key.length === 1 && !options.ctrlKey && !options.metaKey && !options.altKey)
+        insert(key, false);
+      target.dispatchEvent(new KeyboardEvent("keyup", options));
+      break;
     }
-  } finally {
-    for (const root of submitRoots)
-      root.removeEventListener("submit", preventSubmit, true);
+    case "scroll":
+      if (locator)
+        target.scrollBy({ left: command.x ?? 0, top: command.y ?? 0, behavior: "instant" });
+      else window.scrollBy({ left: command.x ?? 0, top: command.y ?? 0, behavior: "instant" });
+      break;
+    case "hover":
+      target.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, composed: true, pointerType: "mouse" }));
+      target.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true }));
+      target.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+      break;
+    default: throw new Error("Unknown page action.");
   }
-  return blocked ? outline(blocked) : { ok: true, status: "acted" };
+  return { ok: true, status: "acted" };
 }

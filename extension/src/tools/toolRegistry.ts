@@ -13,5 +13,5 @@ import { pageTools } from "./page/pageTools.ts";
 export const sections: ToolSection[] = [{ id: "appdata", title: "App data" }, { id: "browser", title: "Browser" }, { id: "meetings", title: "Meetings" }, { id: "page", title: "Page control" }];
 export const groups: ToolGroup[] = [{ section: "appdata", id: "slack", title: "Slack" }, { section: "appdata", id: "outlook", title: "Outlook" },
   { section: "appdata", id: "gmail", title: "Gmail" }, { section: "browser", id: "tabs", title: "Tabs" }, { section: "meetings", id: "web", title: "Meetings" },
-  { section: "page", id: "control", title: "Page control", panel: "siteAccess", permissionNote: "Uses the exact site approvals above." }];
+  { section: "page", id: "control", title: "Page control", panel: "siteAccess", permissionNote: "Only on the approved sites above." }];
 export const tools: BrowserTool[] = [slackCookies, slackApi, outlookMail, gmailThread, gmailAttachments, gmailDraft, gmailReply, tabsOpen, googleMeet, zoom, teams, ...pageTools];

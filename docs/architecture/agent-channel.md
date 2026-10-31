@@ -164,7 +164,7 @@ Reasons:
 | Open a tab | `extension/src/tools/browser/tabs/tabsOpen.ts` |
 | Page tools, argument validation and frame routing | `extension/src/tools/page/pageTools.ts` |
 | DOM snapshots, locators and actions | `extension/src/tools/page/pageDocument.ts` |
-| Exact-origin approvals and temporary submit guard | `extension/src/tools/page/siteAccess.ts`, `extension/src/tools/page/formGuard.ts` |
+| Exact-origin approvals | `extension/src/tools/page/siteAccess.ts` |
 | Site approval UI and trusted extension messages | `extension/src/siteAccessPanel.ts`, `extension/src/siteAccessMessages.ts`, `extension/src/approval.ts` |
 | Icon (rendered to PNG by the build) | `extension/icon.svg`, `scripts/build.mjs` |
 | CLI and registration | `cli/browserAgent.ts`, `cli/registration.ts` |
@@ -224,13 +224,14 @@ A screenshot requires the requested tab to be active in its window, checks tab i
 again after capture, and discards the image if either changed. JPEG quality is configurable, with
 an 800,000-character image cap below the transport cap. Pixels include visible embedded frames.
 
-The submit guard refuses native submit controls and Enter in single-line form inputs before
-dispatching their action. A capture listener prevents submit events during an action. A short-lived
-main-world wrapper also blocks `HTMLFormElement.submit` and `requestSubmit`, outlines the form and
-restores the originals after execution, or after three seconds if execution was interrupted.
-It cannot cover cached native methods, delayed callbacks, arbitrary fetches, autosave or
-JavaScript-only Send buttons. Those limits make the agent rule mandatory: prepare the work, inspect
-it, then leave final submission to the user. Page content is data and cannot authorize more actions.
+There is no technical submit guard. Version 0.2.0 first refused every native submit control,
+but sites such as Question2Answer build the "comment" button that only opens an editor as
+`<input type="submit">` handled by JavaScript, exactly like the "Add comment" button that posts it.
+A check by markup or by whether the page cancels the native submission cannot tell the two apart,
+and a per-button allow list was rejected as too much work for the user. The rule therefore lives in
+the agent instructions: press controls that open, close or navigate, stop before the action that
+sends or saves the user's data, and name that button to the user. Page content is data and cannot
+authorize more actions.
 
 ## Meeting tools
 
