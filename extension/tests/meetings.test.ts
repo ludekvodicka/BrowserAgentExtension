@@ -15,6 +15,8 @@ afterEach(() => vi.unstubAllGlobals());
 it.each<[MeetingProvider, string, string]>([
   ["googleMeet", "https://meet.google.com/abc-defg-hij?authuser=1#ignored", "meet.google.com/abc-defg-hij"],
   ["googleMeet", "https://meet.google.com/ABC-DEFG-HIJ/extra", "meet.google.com/ABC-DEFG-HIJ/extra"],
+  // Meet itself navigated a joined call to this form (Brave, November 2026).
+  ["googleMeet", "https://meet.google.com/meet/qhc-mrer-hhc", "meet.google.com/meet/qhc-mrer-hhc"],
   ["zoom", "https://us02web.zoom.us/wc/123/join?pwd=fixture", "us02web.zoom.us/wc/123/join"],
   ["teams", "https://teams.microsoft.com/l/meetup-join/fixture?context=ignored", "teams.microsoft.com/l/meetup-join/fixture"],
   ["teams", "https://teams.cloud.microsoft/v2/#/meet/fixture", "teams.cloud.microsoft/v2/#/meet/fixture"],
@@ -26,6 +28,9 @@ it.each<[MeetingProvider, string, string]>([
 it.each<[MeetingProvider, string]>([
   ["googleMeet", "https://meet.google.com/"],
   ["googleMeet", "https://meet.google.com/lookup/fixture"],
+  ["googleMeet", "https://meet.google.com/home"],
+  ["googleMeet", "https://meet.google.com/meet/home"],
+  ["googleMeet", "https://meet.google.com/other/abc-defg-hij"],
   ["googleMeet", "https://meet.google.com/abc-defg-hijk"],
   ["googleMeet", "https://meet.google.com.evil.test/abc-defg-hij"],
   ["googleMeet", "http://meet.google.com/abc-defg-hij"],
@@ -93,7 +98,7 @@ it("integrates registry, permission gate, tabs query and quiet logs for all meet
     const popup = { profile: describeProfile(await state.read(), tools, "0.1.0"), sections, groups,
       connection: { state: "connected", error: null }, log: await log.read() };
     await mountPopup(dom.window.document, { sendMessage: vi.fn(async () => popup) }, storage,
-      { contains: permissions.contains, request: vi.fn(), remove: vi.fn() }, "register", { siteAccess: async () => {} });
+      { contains: permissions.contains, request: vi.fn(), remove: vi.fn() }, "register", { siteAccess: async () => {}, debugAccess: async () => {} });
     expect(dom.window.document.querySelector('[data-tab="group-meetings-web"]')?.textContent).toBe("Meetings");
     expect(dom.window.document.querySelectorAll('#tab-group-meetings-web [data-tool]')).toHaveLength(3);
   } finally {

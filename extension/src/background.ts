@@ -7,6 +7,8 @@ import { RequestLog } from "./requestLog.ts";
 import { tools, sections, groups } from "./tools/toolRegistry.ts";
 import { siteAccess, SiteCapacityError } from "./tools/page/siteAccess.ts";
 import { siteAccessMessage } from "./siteAccessMessages.ts";
+import { debugAccessMessage } from "./debugAccessMessages.ts";
+import { debugAccess } from "./tools/debug/debugAccess.ts";
 import { forgetPageTab } from "./tools/page/pageTools.ts";
 
 const state = new ProfileState(chrome.storage.local);
@@ -22,11 +24,14 @@ chrome.runtime.onMessage.addListener((request, sender, reply) => {
     void siteAccessMessage(request).then(reply).catch(error => reply({ error: error instanceof SiteCapacityError
       ? error.message : "Cannot update site access. The request may have expired; reopen Page control." }));
     return true;
+  } else if (request?.op === "debug-access") {
+    void debugAccessMessage(request).then(reply).catch(error => reply({ error: error instanceof Error ? error.message : "Cannot update debug access." }));
+    return true;
   } else if (request?.op === "popup") {
     const previous = connection.getStatus();
     connection.connect();
     void Promise.all([describe(), log.read(), chrome.action.setBadgeText({ text: "" })])
-      .then(async ([profile, entries]) => { await siteAccess.badge(); reply({ profile, sections, groups, log: entries,
+      .then(async ([profile, entries]) => { await siteAccess.badge(); await debugAccess.badge(); reply({ profile, sections, groups, log: entries,
         connection: { ...connection.getStatus(), error: connection.getStatus().error || previous.error } }); })
       .catch(() => reply({ error: "Cannot read profile settings." }));
     return true;
@@ -45,7 +50,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 void grants.completePending().then(() => pageScripts.sync());
 void siteAccess.completeApprovals();
-chrome.alarms.onAlarm.addListener(() => void siteAccess.badge());
+chrome.alarms.onAlarm.addListener(() => void siteAccess.badge().then(() => debugAccess.badge()));
 chrome.tabs.onRemoved.addListener(forgetPageTab);
 chrome.runtime.onStartup.addListener(() => connection.connect());
 chrome.runtime.onInstalled.addListener(() => connection.connect());

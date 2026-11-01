@@ -13,7 +13,7 @@ export function meetingKey(provider: MeetingProvider, address: string): string |
   let matches: boolean;
   let route = url.pathname;
   if (provider === "googleMeet")
-    matches = url.hostname === "meet.google.com" && /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}(\/|$)/i.test(route);
+    matches = url.hostname === "meet.google.com" && /^\/(meet\/)?[a-z]{3}-[a-z]{4}-[a-z]{3}(\/|$)/i.test(route);
   else if (provider === "zoom")
     matches = url.hostname.endsWith(".zoom.us") && route.startsWith("/wc/");
   else if (provider === "teams") {

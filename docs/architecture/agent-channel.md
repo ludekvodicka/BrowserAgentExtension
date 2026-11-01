@@ -162,6 +162,7 @@ Reasons:
 | Gmail reply, compose filling and attaching | `extension/src/tools/appdata/gmail/gmailReply.ts`, `gmailComposePage.ts`, `fillCompose` in `gmailTabs.ts` |
 | File chunks (host send, extension join) | `host/src/host.rs`, `extension/src/connection.ts` |
 | Open a tab | `extension/src/tools/browser/tabs/tabsOpen.ts` |
+| Debug access store, tools, approval panel and messages | `extension/src/tools/debug/debugAccess.ts`, `extension/src/tools/debug/debugTools.ts`, `extension/src/debugAccessPanel.ts`, `extension/src/debugAccessMessages.ts` |
 | Page tools, argument validation and frame routing | `extension/src/tools/page/pageTools.ts` |
 | DOM snapshots, locators and actions | `extension/src/tools/page/pageDocument.ts` |
 | Exact-origin approvals | `extension/src/tools/page/siteAccess.ts` |
@@ -169,6 +170,23 @@ Reasons:
 | Icon (rendered to PNG by the build) | `extension/icon.svg`, `scripts/build.mjs` |
 | CLI and registration | `cli/browserAgent.ts`, `cli/registration.ts` |
 | Profile discovery and JSON line client | `cli/pipeClient.ts` |
+- **Debug access:** `debug.requestAccess` takes a `reason` (1 to 500 characters) and stores one pending
+  request with the caller, which expires after ten minutes. Only a new request opens the approval UI
+  (the popup, else `approval.html`) and sets the badge `D`; a later call returns the current status
+  without opening it again, so an agent polls with the same tool. `D` never replaces another badge.
+  The popup's **Debug** tab shows the caller and reason with **Approve for 10 minutes**,
+  **Approve for 1 hour** and **Deny**; an active grant shows its end time and **Stop now**. Approval
+  messages are accepted only from the popup and approval page, as for site access. `debug.chrome`
+  then calls `chrome.<namespace>.<method>` with `args`, an array of at most 10 JSON values, in the
+  service worker, and returns `{api, result}` with the JSON form of the result. Its `checkAccess`
+  refuses with `permission_missing` when no grant is active, so the grant ends without a timer.
+  Decision: Manifest V3 forbids `eval` and string code in extension pages, so the debug tool cannot
+  run console text; calling extension APIs by name with JSON arguments is the closest equivalent, and
+  it reads the extension's own view (for example which tabs `chrome.tabs.query` returns). The
+  `cookies` namespace (credentials) and `storage` namespace (the extension's own grants, including
+  this debug grant) are refused. Every other API is reachable, including closing tabs and changing
+  permissions, which is why access is time-limited and off unless the user approves it. Both tools
+  also need their switches, like any tool.
 
 ## Page control
 
@@ -239,7 +257,7 @@ Only HTTPS URLs match. The host restrictions are checked again by the pure rule 
 
 | Tool | Optional host permissions | URL rule |
 |---|---|---|
-| `meetings.web.googleMeet` | `https://meet.google.com/*` | Path matches `^/[a-z]{3}-[a-z]{4}-[a-z]{3}(/\|$)`, case-insensitive |
+| `meetings.web.googleMeet` | `https://meet.google.com/*` | Path matches `^/(meet/)?[a-z]{3}-[a-z]{4}-[a-z]{3}(/\|$)`, case-insensitive. Meet opens a joined call at `/meet/<code>`, so a rule without that prefix missed live calls |
 | `meetings.web.zoom` | `https://*.zoom.us/*` | Hostname ends with `.zoom.us`; path starts with `/wc/`, case-sensitive. Bare `zoom.us` and `/j/` are excluded. |
 | `meetings.web.teams` | `https://teams.microsoft.com/*`, `https://teams.cloud.microsoft/*` | Path plus hash matches `/(meetup-join\|meet\|call)\b`, case-insensitive |
 

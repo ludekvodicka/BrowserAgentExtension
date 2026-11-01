@@ -27,6 +27,7 @@ the agent must leave the final Send or Submit to you.
 | Meetings | Google Meet, Zoom, Teams | The meeting tabs open in the profile, so a recorder can offer to record the call |
 | Page control | Request site access and check its status | A request you approve or deny in the extension, with the exact website address and caller |
 | Page control | List, inspect, read and operate approved pages | Page text, buttons and fields; clicks, typing and choices on sites you approved. You press the final send |
+| Debug | Time-limited debug access | After you approve a stated reason for 10 minutes or 1 hour, calls to the extension's own browser APIs (tabs, windows, permissions), to find out why a tool sees nothing |
 | Page control | Screenshot | The visible active tab, written only to the agent's output file after you click the extension icon on that tab |
 
 The Meetings tools are what [Meeting Recorder](https://github.com/ludekvodicka/MeetingRecorder) uses to
@@ -44,6 +45,8 @@ notice a browser meeting and show its recording prompt.
   press buttons that open, close or switch things, but it leaves the button that sends, posts or
   saves your data to you. That is the agent's rule, not a technical lock: a website can also autosave
   when fields change, so approve sites only for work you intend.
+- **Debug access ends by itself.** The agent must ask with a reason; you approve it for 10 minutes or
+  1 hour in the **Debug** tab, or stop it at once. Cookies and the extension's own settings stay closed to it.
 - **Secrets stay out of sight.** A tool that returns a credential writes it only into a file; the
   command line never prints it.
 - **You can see what happened.** The popup lists the last 20 requests: time, tool, caller and result.
@@ -292,7 +295,7 @@ Enable the desired tools in the popup's **Meetings** tab and allow their site pe
 
 | Tool | Matching meeting tabs |
 |---|---|
-| `meetings.web.googleMeet` | HTTPS `meet.google.com`, path starting with a meeting code such as `/abc-defg-hij` |
+| `meetings.web.googleMeet` | HTTPS `meet.google.com`, path starting with a meeting code such as `/abc-defg-hij` or `/meet/abc-defg-hij` |
 | `meetings.web.zoom` | HTTPS subdomains of `zoom.us`, path starting with `/wc/` |
 | `meetings.web.teams` | HTTPS `teams.microsoft.com` or `teams.cloud.microsoft`, meeting/call routes in the path or fragment |
 

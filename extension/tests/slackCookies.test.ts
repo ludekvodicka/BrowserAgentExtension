@@ -54,6 +54,8 @@ it("real registry is described, denied before reading cookies, then allowed with
     { id: "page.read", section: "page", group: "control", sensitive: false, enabled: false },
     { id: "page.act", section: "page", group: "control", sensitive: false, enabled: false },
     { id: "page.screenshot", section: "page", group: "control", sensitive: true, enabled: false },
+    { id: "debug.requestAccess", section: "debug", group: "console", sensitive: false, enabled: false },
+    { id: "debug.chrome", section: "debug", group: "console", sensitive: false, enabled: false },
   ] } });
   await state.setAgentAccess(true);
   const request = { id: "call", op: "call" as const, protocolVersion, tool: slackCookies.id, caller: "fixture" };
