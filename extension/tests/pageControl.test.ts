@@ -42,7 +42,8 @@ beforeEach(() => {
   permitted = new Set();
   badge = "";
   vi.stubGlobal("chrome", {
-    storage: { local: { get: vi.fn(async () => structuredClone(data)), set: vi.fn(async values => { Object.assign(data, structuredClone(values)); }) } },
+    storage: { local: { get: vi.fn(async () => structuredClone(data)), set: vi.fn(async values => { Object.assign(data, structuredClone(values)); }) },
+      session: { set: vi.fn(async () => {}) } },
     permissions: { contains: vi.fn(async ({ origins }) => origins.every((origin: string) => permitted.has(origin))),
       request: vi.fn(async ({ origins }) => { origins.forEach((origin: string) => permitted.add(origin)); return true; }) },
     action: { setBadgeText: vi.fn(async ({ text }) => { badge = text; }), getBadgeText: vi.fn(async () => badge), openPopup: vi.fn(async () => {}) },
@@ -316,4 +317,26 @@ it("dispatches the real registry tools through site gates and frame-bound refs, 
   data.agentAccess = false;
   expect(await call("page.read", { tabId: 7 })).toMatchObject({ code: "access_off" });
   expect(JSON.stringify(await log.read())).not.toContain("Private draft");
+});
+
+it("click with newTab opens the link in a background tab beside the page, like Ctrl+click, and leaves the page in place", async () => {
+  const p = page('<a href="/movies/42"><span>Movie 42</span></a><a href="mailto:x@support.example">Mail</a><button type="button">Play</button>');
+  const navigate = vi.fn((event: Event) => event.preventDefault());
+  p.document.querySelectorAll("a").forEach(link => link.addEventListener("click", navigate));
+  const act = (selector: string, newTab = true) => p.execute(command({ operation: "act", locator: { selector }, action: "click", newTab }));
+  expect(act("span")).toEqual({ ok: true, status: "link", url: "https://support.example/movies/42" });
+  expect(act("a[href^=mailto]")).toMatchObject({ code: "tool_args_invalid" });
+  expect(act("button")).toMatchObject({ code: "tool_args_invalid" });
+  expect(navigate).not.toHaveBeenCalled();
+  permitted.add(hostPattern("https://support.example"));
+  await new SiteAccess().beginApproval("https://support.example", null);
+  vi.mocked(chrome.scripting.executeScript).mockImplementation((async (injection: { args: [PageCommand] }) =>
+    [{ frameId: 0, documentId: "doc0", result: p.execute(...injection.args) }]) as unknown as typeof chrome.scripting.executeScript);
+  const tool = pageTools.find(candidate => candidate.id === "page.act")!;
+  expect(await tool.run({ tabId: 7, selector: "a[href^='/movies']", action: "click", newTab: true }, [], { caller: "tester" }))
+    .toEqual({ ok: true, value: { status: "openedInNewTab", tabId: 7, frameId: 0, newTabId: 8, url: "https://support.example/movies/42" } });
+  expect(chrome.tabs.create).toHaveBeenCalledWith({ url: "https://support.example/movies/42", active: false, openerTabId: 7, windowId: 1 });
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({ "agentTab:8": true });
+  expect(await tool.run({ tabId: 7, selector: "button", action: "hover", newTab: true }, [], { caller: "tester" })).toMatchObject({ code: "tool_args_invalid" });
+  expect(await tool.run({ tabId: 7, selector: "button", action: "click", newTab: "yes" }, [], { caller: "tester" })).toMatchObject({ code: "tool_args_invalid" });
 });

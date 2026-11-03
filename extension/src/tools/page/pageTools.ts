@@ -3,6 +3,7 @@ import type { BrowserTool, ToolFailure, ToolResult } from "../browserTool.ts";
 import { pageDocument } from "./pageDocument.ts";
 import type { PageAction, PageCommand, PageLocator } from "./pageDocument.ts";
 import { openApproval, siteAccess, SiteCapacityError, webOrigin } from "./siteAccess.ts";
+import { agentTabs } from "../browser/tabs/agentTabs.ts";
 
 const invalid = (message: string): ToolFailure => ({ ok: false, code: "tool_args_invalid", message });
 const missing = (message: string): ToolFailure => ({ ok: false, code: "tab_not_ready", message });
@@ -56,7 +57,7 @@ function locatorFrom(args: Record<string, unknown>): PageLocator | ToolFailure |
 
 function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string, unknown>): PageCommand | ToolFailure {
   const allowed = ["tabId", "frameId", "ref", "selector", "role", "name", ...(operation === "snapshot" ? ["limit"]
-    : operation === "read" ? ["limit", "format"] : ["action", "text", "values", "checked", "key", "x", "y"])];
+    : operation === "read" ? ["limit", "format"] : ["action", "text", "values", "checked", "key", "x", "y", "newTab"])];
   if (Object.keys(args).some(key => !allowed.includes(key)) || args.frameId !== undefined && !integer(args.frameId))
     return invalid("Unknown argument or invalid frameId. Use the page tool's documented arguments.");
   const locator = locatorFrom(args);
@@ -78,6 +79,9 @@ function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string
     if (!locator && args.action !== "scroll")
       return invalid("This action needs a ref, selector, or role and name.");
     command.action = args.action as PageAction;
+    if (args.newTab !== undefined && (args.action !== "click" || typeof args.newTab !== "boolean"))
+      return invalid("newTab is a boolean option of the click action.");
+    command.newTab = args.newTab as boolean | undefined;
     switch (command.action) {
       case "fill": case "type":
         if (typeof args.text !== "string" || args.text.length > 100_000)
@@ -178,6 +182,12 @@ async function runDocument(operation: "snapshot" | "read" | "act", args: unknown
       return missing("The document changed during the operation. Inspect it before trying again.");
     if (!result.result.ok)
       return result.result;
+    if (result.result.status === "link") {
+      const url = result.result.url!;
+      const opened = await chrome.tabs.create({ url, active: false, openerTabId: tabId, windowId: tab.windowId });
+      await agentTabs.record(opened.id);
+      return { ok: true, value: { status: "openedInNewTab", tabId, frameId, newTabId: opened.id, url: url.slice(0, 2000) } };
+    }
     return { ok: true, value: { ...result.result, tabId, frameId } };
   } catch {
     return missing("The page or its permission changed, or scripting is unavailable. Inspect the page before retrying an action.");

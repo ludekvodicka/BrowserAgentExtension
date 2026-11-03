@@ -2,9 +2,9 @@ export type PageLocator = { ref?: string; selector?: string; role?: string; name
 export type PageAction = "click" | "fill" | "type" | "select" | "check" | "press" | "scroll" | "hover";
 export type PageCommand = { operation: "snapshot" | "read" | "act"; origins: string[]; generation: string; limit: number;
   locator?: PageLocator; action?: PageAction; text?: string; values?: string[]; checked?: boolean; key?: string;
-  x?: number; y?: number; format?: "text" | "html" };
+  x?: number; y?: number; format?: "text" | "html"; newTab?: boolean };
 export type PageElement = { ref: string; role: string; name: string; value?: string; checked?: boolean; disabled?: boolean };
-export type PageDocumentResult = { ok: true; elements?: PageElement[]; truncated?: boolean; content?: string; status?: string; origin?: string }
+export type PageDocumentResult = { ok: true; elements?: PageElement[]; truncated?: boolean; content?: string; status?: string; origin?: string; url?: string }
   | { ok: false; code: "permission_missing" | "tab_not_ready" | "tool_args_invalid" | "tool_denied"; message: string };
 
 // Serialized into the isolated world: every runtime helper stays inside this function.
@@ -208,7 +208,17 @@ export function pageDocument(command: PageCommand): PageDocumentResult {
     return false;
   }
   switch (command.action) {
-    case "click": target.click(); break;
+    case "click": {
+      if (!command.newTab) {
+        target.click();
+        break;
+      }
+      // The extension opens the link itself: a synthetic Ctrl+click is untrusted, so the popup blocker stops it.
+      const link = target.closest("a[href], area[href]") as HTMLAnchorElement | HTMLAreaElement | null;
+      if (!link || !["http:", "https:"].includes(link.protocol))
+        return fail("tool_args_invalid", "newTab needs a link with an http(s) address. This element is not such a link; click it without newTab.");
+      return { ok: true, status: "link", url: link.href };
+    }
     case "fill": case "type":
       if (!insert(command.text!, command.action === "fill"))
         return fail("tab_not_ready", "This is not an editable text field, or the editor refused text insertion.");

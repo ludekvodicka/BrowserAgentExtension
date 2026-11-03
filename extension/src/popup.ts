@@ -80,7 +80,13 @@ export function renderTools(document: Document, data: PopupData, grants: Grants,
       heading.className = "muted";
       heading.textContent = `${section.title} · ${group.title}`;
       panel.append(heading);
-      for (const tool of data.profile.tools.filter(item => item.section === section.id && item.group === group.id)) {
+      const groupTools = data.profile.tools.filter(item => item.section === section.id && item.group === group.id);
+      if (group.groupSwitch) {
+        renderGroupSwitch(document, panel, group, groupTools, grants, message, onChange);
+        document.body.insertBefore(panel, accessPanel);
+        continue;
+      }
+      for (const tool of groupTools) {
         const row = document.createElement("div");
         row.className = "tool";
         const label = document.createElement("label");
@@ -112,6 +118,37 @@ export function renderTools(document: Document, data: PopupData, grants: Grants,
       document.body.insertBefore(panel, accessPanel);
     }
   }
+}
+
+function renderGroupSwitch(document: Document, panel: HTMLElement, group: ToolGroup, tools: ProfileInfo["tools"], grants: Grants,
+  message: HTMLElement, onChange: () => void): void {
+  const row = document.createElement("div");
+  row.className = "tool";
+  const label = document.createElement("label");
+  const toggle = document.createElement("input");
+  toggle.type = "checkbox";
+  toggle.dataset.group = group.id;
+  const show = () => {
+    toggle.checked = tools.every(tool => tool.enabled);
+    toggle.indeterminate = !toggle.checked && tools.some(tool => tool.enabled);
+  };
+  show();
+  label.append(toggle, document.createTextNode(group.groupSwitch!));
+  const note = document.createElement("p");
+  note.className = "hosts muted";
+  note.textContent = `${group.permissionNote ?? "No website permission required"} Includes: ${tools.map(tool => tool.title).join(", ")}.`;
+  row.append(label, note);
+  panel.append(row);
+  toggle.addEventListener("change", () => {
+    const desired = toggle.checked;
+    toggle.disabled = true;
+    void grants.setGroupEnabled(tools.map(tool => tool.id), desired).then(() => {
+      tools.forEach(tool => tool.enabled = desired);
+      message.textContent = "Tool choice saved.";
+      onChange();
+    }).catch(() => message.textContent = "Could not save the tool choice. Reopen the popup to check the saved state.")
+      .finally(() => { show(); toggle.disabled = false; });
+  });
 }
 
 function renderRequests(document: Document, log: RequestLogEntry[]): void {

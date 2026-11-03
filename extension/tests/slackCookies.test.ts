@@ -44,6 +44,7 @@ it("real registry is described, denied before reading cookies, then allowed with
     { id: "appdata.gmail.draft", section: "appdata", group: "gmail", sensitive: false, enabled: false },
     { id: "appdata.gmail.reply", section: "appdata", group: "gmail", sensitive: false, enabled: false },
     { id: "browser.tabs.open", section: "browser", group: "tabs", sensitive: false, enabled: false },
+    { id: "browser.tabs.close", section: "browser", group: "tabs", sensitive: false, enabled: false },
     { id: "meetings.web.googleMeet", section: "meetings", group: "web", sensitive: false, enabled: false },
     { id: "meetings.web.zoom", section: "meetings", group: "web", sensitive: false, enabled: false },
     { id: "meetings.web.teams", section: "meetings", group: "web", sensitive: false, enabled: false },
@@ -56,6 +57,7 @@ it("real registry is described, denied before reading cookies, then allowed with
     { id: "page.screenshot", section: "page", group: "control", sensitive: true, enabled: false },
     { id: "debug.requestAccess", section: "debug", group: "console", sensitive: false, enabled: false },
     { id: "debug.chrome", section: "debug", group: "console", sensitive: false, enabled: false },
+    { id: "debug.evaluate", section: "debug", group: "console", sensitive: true, enabled: false },
   ] } });
   await state.setAgentAccess(true);
   const request = { id: "call", op: "call" as const, protocolVersion, tool: slackCookies.id, caller: "fixture" };

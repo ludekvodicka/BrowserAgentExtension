@@ -1,4 +1,5 @@
 import type { BrowserTool } from "../../browserTool.ts";
+import { agentTabs } from "./agentTabs.ts";
 
 const webUrl = (value: unknown) => {
   if (typeof value !== "string")
@@ -29,6 +30,7 @@ export const tabsOpen: BrowserTool = {
       if (windowId !== undefined && (await chrome.windows.get(windowId).catch(() => null))?.type !== "normal")
         return { ok: false, code: "tool_args_invalid", message: `This browser profile has no window ${windowId}; omit windowId to use the window the user used last.` };
       const tab = await chrome.tabs.create({ url, active: true, ...(windowId === undefined ? {} : { windowId }) });
+      await agentTabs.record(tab.id);
       return { ok: true, value: { tabId: tab.id, windowId: tab.windowId, url } };
     } catch {
       return { ok: false, code: "extension_error", message: "Could not open the tab. Retry, or reload the extension." };

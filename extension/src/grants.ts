@@ -44,6 +44,17 @@ export class Grants {
     } else throw new Error("Unknown grant state.");
   }
 
+  // One switch for a whole group: it has no site prompt, so it supports only tools without host permissions.
+  async setGroupEnabled(ids: readonly string[], enabled: boolean): Promise<void> {
+    const tools = ids.map(id => this.tools.find(item => item.id === id));
+    if (tools.some(tool => !tool))
+      throw new Error("Unknown tool. Reopen the popup.");
+    if (tools.some(tool => tool!.hosts.length))
+      throw new Error("A group switch covers only tools without site permissions.");
+    const current = await this.state.read();
+    await this.state.setEnabledTools(enabled ? [...new Set([...current.enabledTools, ...ids])] : current.enabledTools.filter(id => !ids.includes(id)));
+  }
+
   async completePending(): Promise<void> {
     const { pendingTool } = await this.state.read();
     if (!pendingTool)

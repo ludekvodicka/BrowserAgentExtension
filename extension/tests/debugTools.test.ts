@@ -6,7 +6,7 @@ import { mountDebugAccess } from "../src/debugAccessPanel.ts";
 import { ProfileState } from "../src/profileState.ts";
 import { RequestLog } from "../src/requestLog.ts";
 import { DebugAccess, debugAccess } from "../src/tools/debug/debugAccess.ts";
-import { debugChrome, debugRequestAccess, debugTools } from "../src/tools/debug/debugTools.ts";
+import { debugChrome, debugEvaluate, debugRequestAccess, debugTools } from "../src/tools/debug/debugTools.ts";
 import { protocolVersion } from "../../shared/protocol.ts";
 
 let data: Record<string, unknown>;
@@ -104,6 +104,39 @@ it.each([[{}], [{ api: "tabs" }], [{ api: "tabs.query()" }], [{ api: "tabs.query
   expect(await debugChrome.run(args)).toMatchObject({ ok: false, code: "tool_args_invalid" });
   expect(chrome.cookies.getAll).not.toHaveBeenCalled();
   expect(chrome.storage.local.set).not.toHaveBeenCalled();
+});
+
+function stubDebugger(response: unknown, attach = vi.fn(async () => {})) {
+  const debuggerApi = { attach, sendCommand: vi.fn(async () => response), detach: vi.fn(async () => {}) };
+  Object.assign(chrome, { debugger: debuggerApi });
+  return debuggerApi;
+}
+
+it.each([[{}], [{ tabId: 7 }], [{ tabId: "7", expression: "1" }], [{ tabId: 7, expression: " " }], [{ tabId: 7, expression: "1", extra: 1 }]])("refuses evaluate args %j", async args => {
+  const api = stubDebugger({ result: { type: "number", value: 1 } });
+  expect(await debugEvaluate.run(args)).toMatchObject({ ok: false, code: "tool_args_invalid" });
+  expect(api.attach).not.toHaveBeenCalled();
+});
+
+it("evaluates in the tab through an attached debugger, returns the value and detaches", async () => {
+  await approve(10);
+  expect(await debugEvaluate.checkAccess!({})).toBeUndefined();
+  const api = stubDebugger({ result: { type: "object", value: { count: 2 } } });
+  expect(await debugEvaluate.run({ tabId: 7, expression: "({ count: 2 })" })).toEqual({ ok: true, value: { tabId: 7, type: "object", result: { count: 2 } } });
+  expect(api.attach).toHaveBeenCalledWith({ tabId: 7 }, "1.3");
+  expect(api.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.evaluate", expect.objectContaining({ expression: "({ count: 2 })", returnByValue: true, awaitPromise: true }));
+  expect(api.detach).toHaveBeenCalledWith({ tabId: 7 });
+  expect(debugEvaluate.sensitive).toBe(true);
+});
+
+it("reports a thrown expression and a refused attach", async () => {
+  const api = stubDebugger({ result: { type: "object" }, exceptionDetails: { text: "Uncaught", exception: { description: "ReferenceError: x is not defined" } } });
+  expect(await debugEvaluate.run({ tabId: 7, expression: "x" })).toMatchObject({ ok: false, code: "tool_args_invalid", message: "The expression threw: ReferenceError: x is not defined" });
+  expect(api.detach).toHaveBeenCalled();
+  const refused = stubDebugger({}, vi.fn(async () => { throw new Error("Another debugger is already attached to the tab with id: 7."); }));
+  expect(await debugEvaluate.run({ tabId: 7, expression: "1" })).toMatchObject({ ok: false, message: expect.stringContaining("Another debugger") });
+  expect(refused.sendCommand).not.toHaveBeenCalled();
+  expect(await debugEvaluate.checkAccess!({})).toMatchObject({ ok: false, code: "permission_missing" });
 });
 
 it("refuses debug calls through the dispatcher until the user approves", async () => {

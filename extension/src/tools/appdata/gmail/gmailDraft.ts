@@ -57,7 +57,7 @@ export const gmailDraft: BrowserTool = {
         const result = await fillCompose(compose.id, null, null, files);
         if ("ok" in result)
           return result;
-        attached = result;
+        attached = result.attached;
       }
       return { ok: true, value: { account: tab.info.account, to: fields.to ?? [], cc: fields.cc ?? [], bcc: fields.bcc ?? [], subject: fields.subject ?? "",
         bodyLength: (fields.body as string | undefined)?.length ?? 0, attached } };

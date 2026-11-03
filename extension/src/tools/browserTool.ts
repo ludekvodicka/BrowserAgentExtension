@@ -25,4 +25,4 @@ export interface BrowserTool {
 }
 
 export type ToolSection = { id: string; title: string };
-export type ToolGroup = { section: string; id: string; title: string; panel?: string; permissionNote?: string };
+export type ToolGroup = { section: string; id: string; title: string; panel?: string; permissionNote?: string; groupSwitch?: string };

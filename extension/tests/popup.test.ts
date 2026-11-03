@@ -69,3 +69,31 @@ it("saves a trimmed label and reflects a refused permission as disabled", async 
   await vi.waitFor(() => expect(toggle.checked).toBe(false));
   expect(document.getElementById("message")!.textContent).toContain("declined");
 });
+
+it("renders one switch for a group with groupSwitch and saves all its tools together", async () => {
+  const dom = new JSDOM(readFileSync(new URL("../popup.html", import.meta.url), "utf8"));
+  windows.push(dom);
+  const document = dom.window.document;
+  const tools = ["page.read", "page.act"].map((id, index) => ({ id, title: `${id} tool`, section: "page", group: "control", hosts: [], enabled: index === 0, sensitive: false }));
+  const data: PopupData = { profile: { instanceId: "00000000-0000-4000-8000-000000000000", label: null, agentAccess: true, extensionVersion: "0.1.0", protocolVersion: 1, tools },
+    sections: [{ id: "page", title: "Page control" }], groups: [{ section: "page", id: "control", title: "Page control", permissionNote: "Only on approved sites.", groupSwitch: "Allow page control" }],
+    connection: { state: "connected", error: "" }, log: [] };
+  const saved: Record<string, unknown> = { instanceId: data.profile.instanceId, enabledTools: ["page.read"] };
+  const storage = { get: vi.fn(async () => structuredClone(saved)), set: vi.fn(async (value: Record<string, unknown>) => { Object.assign(saved, value); }) };
+  const runtime = { sendMessage: vi.fn(async request => request.op === "status" ? data.connection : data) } as unknown as Pick<typeof chrome.runtime, "sendMessage">;
+  const permissions = { request: vi.fn(async () => true), remove: vi.fn(async () => true), contains: vi.fn(async () => true) };
+  await mountPopup(document, runtime, storage, permissions, "register");
+  expect(document.querySelectorAll("[data-tool]")).toHaveLength(0);
+  const toggle = document.querySelector<HTMLInputElement>("[data-group=control]")!;
+  expect(toggle.checked).toBe(false);
+  expect(toggle.indeterminate).toBe(true);
+  expect(document.getElementById("tab-group-page-control")!.textContent).toContain("Includes: page.read tool, page.act tool.");
+  toggle.click();
+  await vi.waitFor(() => expect(saved.enabledTools).toEqual(["page.read", "page.act"]));
+  await vi.waitFor(() => expect(toggle.disabled).toBe(false));
+  expect(toggle.checked).toBe(true);
+  expect(document.getElementById("summary-tools")!.textContent).toContain("2 of 2");
+  toggle.click();
+  await vi.waitFor(() => expect(saved.enabledTools).toEqual([]));
+  expect(permissions.request).not.toHaveBeenCalled();
+});

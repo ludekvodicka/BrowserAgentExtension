@@ -1,12 +1,13 @@
-export type GmailComposeResult = { kind: "filled"; attached: { name: string; shown: boolean }[] }
-  | { kind: "no_reply_link" } | { kind: "no_message" } | { kind: "no_message_reply" } | { kind: "other_recipient" }
+export type GmailComposeResult = { kind: "filled"; attached: { name: string; shown: boolean }[]; discarded: number }
+  | { kind: "no_reply_link" } | { kind: "no_message" } | { kind: "no_message_reply" } | { kind: "other_recipient" } | { kind: "no_discard" }
   | { kind: "no_compose" } | { kind: "no_attach_button" } | { kind: "no_file_input" };
 
 // Runs in the Gmail tab (isolated world). It only opens a reply, types into the message body and hands files to the
 // compose window's file input: it never dispatches a key event and never touches the send button.
-// With `from`, it replies to the latest message of that sender through the message's own reply button.
+// With `from`, it replies to the latest message of that sender through the message's own reply button; with
+// `replaceDraft` it first discards the open draft replies to that sender below that message.
 export async function gmailComposePage(reply: "reply" | "replyAll" | null, body: string | null, files: { name: string; data: string }[],
-  from: string | null = null): Promise<GmailComposeResult> {
+  from: string | null = null, replaceDraft = false): Promise<GmailComposeResult> {
   const wait = async <T>(find: () => T | null | undefined, ms: number): Promise<T | null> => {
     const end = Date.now() + ms;
     for (;;) {
@@ -22,6 +23,7 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
   };
   const editors = () => [...document.querySelectorAll<HTMLElement>("div[contenteditable='true'][role='textbox']")].filter(element => element.checkVisibility());
   let editor: HTMLElement | null;
+  let discarded = 0;
   if (reply && from) {
     // Each message of the open conversation is a list item whose first address element is its sender.
     const target = from.toLowerCase();
@@ -34,6 +36,21 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
     const item = message() ?? (bubble ? await wait(message, 3000) : undefined);
     if (!item)
       return { kind: "no_message" };
+    if (replaceDraft) {
+      // An open draft reply is a region inside the message it answers, with its recipients as [email] elements (div.afV chips
+      // when expanded) and Gmail's discard button div.oh, whose label depends on the display language.
+      const drafts = [...item.querySelectorAll<HTMLElement>("[role='region']")].filter(region => region.querySelector("[contenteditable='true'][role='textbox']")
+        && [...region.querySelectorAll("[email], div.afV")].some(element => (element.getAttribute("email") ?? element.getAttribute("data-hovercard-id") ?? "").toLowerCase() === target));
+      for (const region of drafts) {
+        const discard = region.querySelector<HTMLElement>("[role='button'].oh");
+        if (!discard)
+          return { kind: "no_discard" };
+        press(discard);
+        if (!await wait(() => !discard.isConnected || !discard.checkVisibility() || null, 3000))
+          return { kind: "no_discard" };
+        discarded++;
+      }
+    }
     // The message's reply button (a plain <button>) carries the same localized label as the reply link below the
     // conversation; that link may be hidden by an open reply, so its text is read regardless of visibility.
     // button.DILLkc is the reply button's class when no such link exists.
@@ -86,7 +103,7 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
     });
   }
   if (!files.length)
-    return { kind: "filled", attached: [] };
+    return { kind: "filled", attached: [], discarded };
   // Each compose window has its own attach button with command="Files"; pressing it makes Gmail create the file input it reads.
   let root: HTMLElement | null = editor;
   while (root && !root.querySelector("div[command='Files']"))
@@ -112,5 +129,5 @@ export async function gmailComposePage(reply: "reply" | "replyAll" | null, body:
   input.dispatchEvent(new Event("change", { bubbles: true }));
   const compose = root;
   await wait(() => files.every(file => compose.innerText.includes(file.name)) || null, 6000);
-  return { kind: "filled", attached: files.map(file => ({ name: file.name, shown: compose.innerText.includes(file.name) })) };
+  return { kind: "filled", attached: files.map(file => ({ name: file.name, shown: compose.innerText.includes(file.name) })), discarded };
 }

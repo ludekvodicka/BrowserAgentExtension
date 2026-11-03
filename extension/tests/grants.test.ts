@@ -70,3 +70,16 @@ it("clears the pending mark when the permission is declined", async () => {
   expect(await s.grants.setEnabled("one", true)).toBe(false);
   expect((await s.state.read()).pendingTool).toBeNull();
 });
+
+it("turns a whole group on and off in one write and refuses tools that need site permissions", async () => {
+  const s = setup();
+  const local = s.tools.map(tool => ({ ...tool, hosts: [] }));
+  const grants = new Grants(s.state, [...local.map(tool => ({ ...tool, id: `page.${tool.id}` })), ...s.tools], s.permissions);
+  await s.grants.setEnabled("one", true);
+  await grants.setGroupEnabled(["page.one", "page.two"], true);
+  expect((await s.state.read()).enabledTools).toEqual(["one", "page.one", "page.two"]);
+  await grants.setGroupEnabled(["page.one", "page.two"], false);
+  expect((await s.state.read()).enabledTools).toEqual(["one"]);
+  await expect(grants.setGroupEnabled(["one"], true)).rejects.toThrow("site permissions");
+  expect(s.permissions.request).toHaveBeenCalledOnce();
+});

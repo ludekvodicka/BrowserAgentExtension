@@ -62,7 +62,7 @@ Click the Browser Agent icon in the toolbar to see and change everything for the
 |---|---|
 | <img src="docs/images/popup-overview.png" width="360" alt="Overview tab"><br>**Overview:** connection state, profile label, Agent access, enabled tools and the latest requests. | <img src="docs/images/popup-not-connected.png" width="360" alt="Overview tab without a native host"><br>**Not connected:** the native host is not installed yet. The popup shows the one command that installs it. |
 | <img src="docs/images/popup-slack.png" width="360" alt="Slack tab"><br>**Slack:** read-only workspace data and the session cookies. | <img src="docs/images/popup-outlook.png" width="360" alt="Outlook tab"><br>**Outlook:** read mail in Outlook on the web. |
-| <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab. This tool needs no site permission. |
+| <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab, and close a tab the agent opened. These tools need no site permission. |
 | <img src="docs/images/popup-meetings.png" width="360" alt="Meetings tab"><br>**Meetings:** list Google Meet, Zoom and Teams meeting tabs for a recorder. | <img src="docs/images/popup-access.png" width="360" alt="Access tab"><br>**Access:** the profile label the agent uses to pick this profile, and the Agent access switch. |
 | <img src="docs/images/popup-page-control.png" width="360" alt="Page control tab"><br>**Page control:** a pending site request to approve or deny, the granted sites, Allow this site, and the page tools. | <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. |
 
@@ -107,12 +107,13 @@ It cannot work on a site you have not approved, on browser pages such as `chrome
 closed web components or canvas drawings, or on sites that accept only real mouse and keyboard
 input. In those cases it says so instead of pretending the work is done.
 
-### What the switches allow
+### What the switch allows
 
-The switches on the Page control tab choose **what** the agent may do. **Where** it may do it is
-the list of approved sites above them. Both are needed, and Agent access must be on.
+The Page control tab has one switch, **Allow page control on approved sites**. It turns all page
+tools on or off together. **Where** the agent may use them is the list of approved sites above it.
+Both are needed, and Agent access must be on. The switch includes these tools:
 
-| Switch | What it allows on approved sites |
+| Tool | What it allows on approved sites |
 |---|---|
 | List tabs on approved sites | See the address and title of your open tabs on approved sites, and nothing about other tabs |
 | Request access to a site | Ask you to approve a new site; only you can approve |
@@ -155,6 +156,7 @@ node cli/browserAgent.ts call work page.accessStatus --args '{"url":"https://sup
 node cli/browserAgent.ts call work page.tabs --caller codex
 node cli/browserAgent.ts call work page.snapshot --args '{"tabId":42,"limit":100}' --caller codex
 node cli/browserAgent.ts call work page.act --args '{"tabId":42,"ref":"<ref from snapshot>","action":"click"}' --caller codex
+node cli/browserAgent.ts call work page.act --args '{"tabId":42,"ref":"<link ref>","action":"click","newTab":true}' --caller codex
 node cli/browserAgent.ts call work page.act --args '{"tabId":42,"ref":"<editor ref>","action":"fill","text":"We are working on this."}' --caller codex
 node cli/browserAgent.ts call work page.read --args '{"tabId":42,"format":"text","limit":20000}' --caller codex
 node cli/browserAgent.ts call work page.screenshot --args '{"tabId":42,"quality":60}' --out capture.json --caller codex
@@ -166,7 +168,10 @@ lower `quality` if the image exceeds the response cap. No image bytes are printe
 
 `page.act` supports `click`, `fill` and `type` (with `text`), `select` (with `values`, an array of
 option values), `check` (with `checked`), `press` (with `key`, such as `Control+a` or `Escape`),
-`scroll` (with pixel offsets `x`/`y`) and `hover`. Each action targets one `ref`, one unique CSS
+`scroll` (with pixel offsets `x`/`y`) and `hover`. `click` with `"newTab":true` works like Ctrl+click
+on a link: the extension opens the link's http(s) address in a background tab next to the page and
+returns its `newTabId`; the page itself stays where it is. It refuses an element that is not a link.
+It needs only the Page control switch, not the Tabs tool. Each action targets one `ref`, one unique CSS
 `selector`, or `role` plus exact accessible `name`. A ref identifies its frame; fallback locators
 default to the top frame, or use a `frameId` from the last snapshot. Scrolling without a locator
 scrolls the page. Native text editing and common keyboard defaults are emulated; synthetic pointer

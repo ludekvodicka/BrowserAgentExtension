@@ -12,8 +12,9 @@ function setup() {
       return { id: 6, type: "popup" };
     throw new Error("No window");
   });
-  vi.stubGlobal("chrome", { tabs: { create }, windows: { get } });
-  return { create };
+  const session = { set: vi.fn(async () => {}) };
+  vi.stubGlobal("chrome", { tabs: { create }, windows: { get }, storage: { session } });
+  return { create, session };
 }
 
 it.each([[undefined], [{}], [{ url: "javascript:alert(1)" }], [{ url: "file:///C:/x" }], [{ url: "chrome://settings" }], [{ url: "not a url" }],
@@ -27,6 +28,7 @@ it("opens the page in the window the user used last and returns its window", asy
   const s = setup();
   expect(await tabsOpen.run({ url: "https://example.com/a b?q=č" })).toEqual({ ok: true, value: { tabId: 11, windowId: 5, url: "https://example.com/a%20b?q=%C4%8D" } });
   expect(s.create).toHaveBeenCalledExactlyOnceWith({ url: "https://example.com/a%20b?q=%C4%8D", active: true });
+  expect(s.session.set).toHaveBeenCalledExactlyOnceWith({ "agentTab:11": true });
 });
 
 it("opens the page in a named window and refuses a window the profile does not have", async () => {

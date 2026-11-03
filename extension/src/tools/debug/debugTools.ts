@@ -52,4 +52,34 @@ export const debugChrome: BrowserTool = {
   },
 };
 
-export const debugTools = [debugRequestAccess, debugChrome];
+// Page code reaches anything the signed-in user can, so the result is sensitive and goes only to the caller's --out file.
+export const debugEvaluate: BrowserTool = {
+  ...metadata, id: "debug.evaluate", title: "Run JavaScript in a tab while debug access is approved", sensitive: true,
+  checkAccess: () => debugAccess.check(),
+  async run(args) {
+    if (!isRecord(args) || Object.keys(args).some(key => !["tabId", "expression"].includes(key)) || !Number.isSafeInteger(args.tabId)
+      || typeof args.expression !== "string" || !args.expression.trim() || args.expression.length > 100_000)
+      return invalid("Supply tabId and expression, JavaScript of 1 to 100,000 characters; its last value is returned, a promise awaited.");
+    // Manifest V3 runs no string code, so the expression goes through the Chrome DevTools Protocol of an attached debugger.
+    const target = { tabId: args.tabId as number };
+    try {
+      await chrome.debugger.attach(target, "1.3");
+    } catch (error) {
+      return invalid(`Could not attach the debugger to tab ${target.tabId}: ${(error instanceof Error ? error.message : String(error)).slice(0, 500)}`);
+    }
+    try {
+      const response = await chrome.debugger.sendCommand(target, "Runtime.evaluate",
+        { expression: args.expression, returnByValue: true, awaitPromise: true, userGesture: true, timeout: 10_000 }) as
+        { result: { type: string; value?: unknown; description?: string }; exceptionDetails?: { text: string; exception?: { description?: string } } };
+      if (response.exceptionDetails)
+        return invalid(`The expression threw: ${(response.exceptionDetails.exception?.description ?? response.exceptionDetails.text).slice(0, 2000)}`);
+      return { ok: true, value: { tabId: target.tabId, type: response.result.type, result: response.result.value ?? response.result.description ?? null } };
+    } catch (error) {
+      return invalid(`Runtime.evaluate failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 500)}`);
+    } finally {
+      await chrome.debugger.detach(target).catch(() => {});
+    }
+  },
+};
+
+export const debugTools = [debugRequestAccess, debugChrome, debugEvaluate];

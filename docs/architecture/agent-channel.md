@@ -135,13 +135,26 @@ Reasons:
   even when an open reply hides that link), else `button.DILLkc`. Before typing it checks the new reply's recipient chips
   (`div.afV`, address in `data-hovercard-id`, hidden while the recipient line is collapsed) in the
   nearest ancestor of its body that holds any, and refuses unless the sender is among them, so a wrong
-  recipient never gets text.
+  recipient never gets text. With `replaceDraft` (only beside `from`) it first discards the open draft
+  replies to that sender: each is a `[role="region"]` inside the message it answers, holding an
+  editable body and its recipients as `[email]` elements (`div.afV` chips when expanded). The script
+  presses the region's discard button (`[role="button"].oh`, whose label depends on the display
+  language) and waits until it is gone, else refuses with `no_discard` before typing. Drafts to other
+  recipients stay. The tool reports the count as `discarded`. Decision: the user asked for a
+  replacement instead of a second draft that Gmail could merge or keep beside the old one.
 - **Open a tab:** `browser.tabs.open` (section Browser) opens an `http` or `https` URL in a new active
   tab, in the profile's last focused window or in a `windowId` the caller got from an earlier call;
   any other scheme (`javascript:`, `file:`, `chrome:`) refuses, so the tool cannot run code in a
   page or open browser settings. It needs no site permission and does not read the page it opens.
   The page loads with the profile's session, which is the purpose and the risk: the switch is off by
   default, and the skill tells agents to open only what the user asked for.
+- **Close a tab:** `browser.tabs.close` (section Browser, own switch) closes one tab by `tabId`, but
+  only a tab an agent tool opened: `browser.tabs.open` and the new tab of a `page.act` link click
+  record its ID in `chrome.storage.session` (`agentTab:<tabId>`, one key per tab so parallel calls
+  do not overwrite each other). Any other tab refuses with `tool_denied`; a recorded tab the user
+  already closed returns `tab_missing`. Session storage clears with the browser session, as do tab
+  IDs. Decision: agents clean up their own tabs without Debug access, and cannot close the user's
+  work. The Gmail draft compose tab is not recorded, because the user reviews and sends that draft.
 
 ## Entry points
 
@@ -162,6 +175,7 @@ Reasons:
 | Gmail reply, compose filling and attaching | `extension/src/tools/appdata/gmail/gmailReply.ts`, `gmailComposePage.ts`, `fillCompose` in `gmailTabs.ts` |
 | File chunks (host send, extension join) | `host/src/host.rs`, `extension/src/connection.ts` |
 | Open a tab | `extension/src/tools/browser/tabs/tabsOpen.ts` |
+| Close an agent tab, record of agent tabs | `extension/src/tools/browser/tabs/tabsClose.ts`, `extension/src/tools/browser/tabs/agentTabs.ts` |
 | Debug access store, tools, approval panel and messages | `extension/src/tools/debug/debugAccess.ts`, `extension/src/tools/debug/debugTools.ts`, `extension/src/debugAccessPanel.ts`, `extension/src/debugAccessMessages.ts` |
 | Page tools, argument validation and frame routing | `extension/src/tools/page/pageTools.ts` |
 | DOM snapshots, locators and actions | `extension/src/tools/page/pageDocument.ts` |
@@ -187,12 +201,26 @@ Reasons:
   this debug grant) are refused. Every other API is reachable, including closing tabs and changing
   permissions, which is why access is time-limited and off unless the user approves it. Both tools
   also need their switches, like any tool.
+- **Debug evaluate:** `debug.evaluate` takes `tabId` and `expression` (JavaScript, up to 100,000
+  characters) under the same grant. It attaches `chrome.debugger` (protocol 1.3) to the tab, runs
+  CDP `Runtime.evaluate` with `returnByValue`, `awaitPromise` and a 10-second timeout, and detaches
+  in every case. Value: `{tabId, type, result}`; a thrown expression or a refused attach (for
+  example DevTools already attached) returns `tool_args_invalid` with the reason. Decision: the user
+  chose CDP over `chrome.userScripts`, so page code runs only under the visible, time-limited debug
+  approval; it needs the `debugger` permission, and Chrome shows its "is debugging this browser" bar
+  while attached. Page code reads anything the signed-in user can, so the tool is sensitive and its
+  value goes only to the CLI's `--out` file. Page control below still uses no debugger.
 
 ## Page control
 
-Page control uses DOM scripting through `chrome.scripting`, with no CDP or debugger permission.
+Page control uses DOM scripting through `chrome.scripting`, with no CDP; only `debug.evaluate` above uses the debugger.
 The registry adds `page.tabs`, `page.requestAccess`, `page.accessStatus`, `page.snapshot`, `page.act`,
-`page.read` and `page.screenshot`. All retain the master switch, per-tool switches and request log.
+`page.read` and `page.screenshot`. All retain the master switch, per-tool grants and request log.
+The popup shows one switch for them: the group's `groupSwitch` title makes `renderTools` draw a
+single checkbox, and `Grants.setGroupEnabled` writes all the group's tool IDs in one update. The
+dispatcher still checks each tool ID, so stored state and older profiles stay valid; a profile with
+only some page tools on shows the switch as indeterminate until it is toggled. A group switch has no
+site prompt, so `setGroupEnabled` refuses tools with host permissions.
 The wire protocol and Rust host are unchanged. Request polling returns immediately within the
 existing 15-second deadline. Screenshots use the existing sensitive-tool output path: JSON in the
 CLI's `--out` file, never an image value on stdout.
@@ -217,7 +245,11 @@ marks the snapshot truncated and refuses fallback locators whose uniqueness cann
 Input and textarea writes use native value
 setters plus input/change events. Contenteditable writes use `execCommand("insertText")`, allowing
 editors to update their own models. Synthetic keyboard/pointer events remain untrusted; applications
-that require real input may refuse them, and CSS hover is not emulated.
+that require real input may refuse them, and CSS hover is not emulated. For the same reason a
+`click` with `newTab` does not dispatch a synthetic Ctrl+click, which the popup blocker stops: the
+page script returns the closest link's http(s) address and the background calls `chrome.tabs.create`
+with `active:false` and the page as `openerTabId`. It is part of `page.act` and needs no
+`browser.tabs.open` grant, because an ordinary click on the same link could navigate the page there.
 
 Site requests live in per-profile local storage as one record per exact origin with caller,
 request ID, timestamps and status. A single background writer serializes updates. Requests expire

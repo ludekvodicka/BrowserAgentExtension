@@ -50,20 +50,23 @@ export async function openConversationTab(account: string | undefined): Promise<
   return { tabId: chosen.tabId, info: { ...chosen.info, threadId: chosen.info.threadId! } };
 }
 
-// Opens a reply (or takes the tab's only compose window), types the body and attaches the files; returns the attach outcome.
-export async function fillCompose(tabId: number, reply: "reply" | "replyAll" | null, body: string | null, files: ToolFile[], from: string | null = null)
-  : Promise<{ name: string; shown: boolean }[] | ToolResult> {
-  const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func: gmailComposePage, args: [reply, body, files, from] });
+// Opens a reply (or takes the tab's only compose window), types the body and attaches the files; returns the attach outcome
+// and how many earlier drafts it discarded.
+export async function fillCompose(tabId: number, reply: "reply" | "replyAll" | null, body: string | null, files: ToolFile[], from: string | null = null,
+  replaceDraft = false): Promise<{ attached: { name: string; shown: boolean }[]; discarded: number } | ToolResult> {
+  const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func: gmailComposePage, args: [reply, body, files, from, replaceDraft] });
   const result = injection?.result;
   switch (result?.kind) {
     case "filled":
-      return result.attached;
+      return { attached: result.attached, discarded: result.discarded };
     case "no_reply_link":
       return { ok: false, code: "tab_not_ready", message: "Gmail shows no reply link below the open conversation. Scroll to its end or open it again, then retry." };
     case "no_message":
       return { ok: false, code: "tab_not_ready", message: `The open conversation shows no message from ${from}. Check the address or expand the conversation's messages, then retry.` };
     case "no_message_reply":
       return { ok: false, code: "extension_error", message: `Gmail showed no reply button on the message from ${from}. Expand that message, then retry.` };
+    case "no_discard":
+      return { ok: false, code: "extension_error", message: `An open draft to ${from} did not close on Gmail's discard button. Nothing was typed; discard it by hand, then retry.` };
     case "other_recipient":
       return { ok: false, code: "extension_error", message: `A reply opened, but its recipients do not show ${from}. Nothing was typed; discard the empty reply.` };
     case "no_compose":
