@@ -64,7 +64,7 @@ Click the Browser Agent icon in the toolbar to see and change everything for the
 | <img src="docs/images/popup-slack.png" width="360" alt="Slack tab"><br>**Slack:** read-only workspace data and the session cookies. | <img src="docs/images/popup-outlook.png" width="360" alt="Outlook tab"><br>**Outlook:** read mail in Outlook on the web. |
 | <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab, and close a tab the agent opened. These tools need no site permission. |
 | <img src="docs/images/popup-meetings.png" width="360" alt="Meetings tab"><br>**Meetings:** list Google Meet, Zoom and Teams meeting tabs for a recorder. | <img src="docs/images/popup-access.png" width="360" alt="Access tab"><br>**Access:** the profile label the agent uses to pick this profile, and the Agent access switch. |
-| <img src="docs/images/popup-page-control.png" width="360" alt="Page control tab"><br>**Page control:** a pending site request to approve or deny, the granted sites, Allow this site, and the page tools. | <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. |
+| <img src="docs/images/popup-page-control.png" width="360" alt="Page control tab"><br>**Page control:** a pending site request to approve or deny, the granted sites, Allow this site, and the page control switch. | <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. |
 
 Each tool row shows the websites the tool needs. The label (for example `work`) is how you name the
 profile when you ask the agent for something, such as "read the Slack thread in my work profile".
@@ -77,7 +77,7 @@ profile, open a comment on the support ticket I have open and write that we are 
 and the agent prepares it. You read the result and press the final button yourself.
 
 <p align="center">
-  <img src="docs/images/popup-page-control.png" width="380" alt="Page control tab with a pending site request, a granted site and the page tools">
+  <img src="docs/images/popup-page-control.png" width="380" alt="Page control tab with a pending site request, two granted sites and the page control switch">
 </p>
 
 ### An example: replying on a support forum
@@ -91,6 +91,21 @@ and the agent prepares it. You read the result and press the final button yourse
    or **Cancel**.
 
 The next time you ask for that website, step 2 is skipped: the approval stays until you remove it.
+
+### An example: showing you where something is
+
+You ask "where do I renew the licence on this page?". The agent finds the control, scrolls it into
+view and draws an orange frame around it with a short label. The agent does not press it.
+
+<p align="center">
+  <img src="docs/images/page-highlight.png" width="760" alt="A licence page with an orange frame and the label 'Renew the licence here' around the Renew licence button">
+</p>
+
+- **The frame stays for 20 seconds** and follows the element when you scroll. When the agent shows a
+  new element, the old frame goes away.
+- **The frame does not block the page:** clicks go through it to the page below.
+- **A disabled control is also framed**, so the agent can show you a button you cannot press yet.
+- **The page is not changed:** the frame is only drawn on top and is not saved.
 
 ### What the agent can do on an approved page
 
