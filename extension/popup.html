@@ -17,6 +17,8 @@
     input[type=text] { flex: 1; min-width: 0; padding: 6px; }
     input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--accent); }
     button.action { padding: 6px 12px; cursor: pointer; }
+    table.sites { width: 100%; border-collapse: collapse; margin: 4px 0; } .sites td { padding: 3px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+    .sites td:last-child { width: 1%; padding-left: 8px; text-align: right; white-space: nowrap; } button.compact { padding: 1px 8px; font-size: 12px; cursor: pointer; }
     .muted { opacity: .7; font-size: 12px; } .row { display: flex; gap: 8px; align-items: center; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: 0 0 auto; } .dot.on { background: var(--ok); }
     .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; } .facts dt { opacity: .7; } .facts dd { margin: 0; overflow-wrap: anywhere; }

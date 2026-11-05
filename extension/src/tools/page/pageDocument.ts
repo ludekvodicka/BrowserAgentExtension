@@ -1,8 +1,8 @@
 export type PageLocator = { ref?: string; selector?: string; role?: string; name?: string };
-export type PageAction = "click" | "fill" | "type" | "select" | "check" | "press" | "scroll" | "hover";
+export type PageAction = "click" | "fill" | "type" | "select" | "check" | "press" | "scroll" | "hover" | "highlight";
 export type PageCommand = { operation: "snapshot" | "read" | "act"; origins: string[]; generation: string; limit: number;
   locator?: PageLocator; action?: PageAction; text?: string; values?: string[]; checked?: boolean; key?: string;
-  x?: number; y?: number; format?: "text" | "html"; newTab?: boolean };
+  x?: number; y?: number; format?: "text" | "html"; newTab?: boolean; label?: string };
 export type PageElement = { ref: string; role: string; name: string; value?: string; checked?: boolean; disabled?: boolean };
 export type PageDocumentResult = { ok: true; elements?: PageElement[]; truncated?: boolean; content?: string; status?: string; origin?: string; url?: string }
   | { ok: false; code: "permission_missing" | "tab_not_ready" | "tool_args_invalid" | "tool_denied"; message: string };
@@ -173,6 +173,39 @@ export function pageDocument(command: PageCommand): PageDocumentResult {
       content = normalize(parts.join(""));
     } else throw new Error("Unknown read format.");
     return { ok: true, content: content.slice(0, command.limit), truncated: content.length > command.limit };
+  }
+
+  // Highlight only shows the user an element, so it also marks disabled controls.
+  if (command.action === "highlight") {
+    for (const previous of document.querySelectorAll("[data-browser-agent-highlight]"))
+      previous.remove();
+    target.scrollIntoView?.({ block: "center", inline: "nearest" });
+    const box = document.createElement("div");
+    box.setAttribute("data-browser-agent-highlight", "");
+    box.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;border:3px solid #f97316;"
+      + "border-radius:4px;box-shadow:0 0 0 4px rgba(249,115,22,.35),0 0 16px 4px rgba(249,115,22,.6);";
+    if (command.label) {
+      const caption = document.createElement("div");
+      caption.textContent = command.label;
+      caption.style.cssText = "position:absolute;left:-3px;bottom:100%;margin-bottom:4px;padding:2px 8px;border-radius:4px;background:#f97316;"
+        + "color:#fff;font:600 13px/1.4 system-ui,sans-serif;white-space:nowrap;";
+      box.append(caption);
+    }
+    document.documentElement.append(box);
+    const expires = Date.now() + 20_000;
+    const place = () => {
+      if (!box.isConnected)
+        return;
+      if (Date.now() > expires || !target!.isConnected) {
+        box.remove();
+        return;
+      }
+      const rect = target!.getBoundingClientRect();
+      Object.assign(box.style, { left: `${rect.left - 4}px`, top: `${rect.top - 4}px`, width: `${rect.width + 8}px`, height: `${rect.height + 8}px` });
+      requestAnimationFrame(place);
+    };
+    place();
+    return { ok: true, status: "highlighted" };
   }
 
   if (!(target instanceof HTMLElement) || target.matches(":disabled") || target.getAttribute("aria-disabled") === "true")

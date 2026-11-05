@@ -100,6 +100,8 @@ The next time you ask for that website, step 2 is skipped: the approval stays un
   "show more", paging, links on the same site.
 - **Fill in** text fields and rich text editors, choose options, tick checkboxes, press keys such
   as Tab or Escape, scroll.
+- **Show you an element:** when you ask where something is, the agent scrolls to it and draws an
+  orange frame with a short label around it for 20 seconds. It does not press it.
 - **Take a screenshot** of the visible tab into a file, after you click the Browser Agent icon on
   that tab (optional switch).
 
@@ -120,7 +122,7 @@ Both are needed, and Agent access must be on. The switch includes these tools:
 | Check site approval status | See whether you approved, denied or have not answered yet |
 | Inspect page elements | See the buttons, links and fields of a page with their labels and current values, including what is typed in forms |
 | Read page text or HTML | Read everything the page shows you |
-| Prepare work on the page | Click, type, choose options, tick boxes, press keys and scroll |
+| Prepare work on the page | Click, type, choose options, tick boxes, press keys, scroll and frame an element to show it to you |
 | Capture the visible page | Save a screenshot of the visible tab into a file, after you click the extension icon on that tab |
 
 ### Approving and removing sites
@@ -131,8 +133,8 @@ Both are needed, and Agent access must be on. The switch includes these tools:
 - **Approve yourself:** open the website, open the popup and click **Allow this site**.
 - **An approval is exact:** `https://support.example.com` does not cover `https://example.com` or
   another subdomain. A frame from another site inside the page needs its own approval.
-- **Remove** under Granted sites ends the agent's access to that site at once. Denied and expired
-  requests are listed under **Previous requests**, where you can remove them. Up to 100 sites fit.
+- **Remove** beside a granted site ends the agent's access to that site at once. Denied and expired
+  requests are listed under **Previous requests**, each with its own **Remove**. Up to 100 sites fit.
 
 **You submit the result.** The agent may press any control a task needs, such as a "comment" button
 that opens an editor. It stops before the button that sends or saves your data: Send, Post, Add
@@ -168,7 +170,10 @@ lower `quality` if the image exceeds the response cap. No image bytes are printe
 
 `page.act` supports `click`, `fill` and `type` (with `text`), `select` (with `values`, an array of
 option values), `check` (with `checked`), `press` (with `key`, such as `Control+a` or `Escape`),
-`scroll` (with pixel offsets `x`/`y`) and `hover`. `click` with `"newTab":true` works like Ctrl+click
+`scroll` (with pixel offsets `x`/`y`), `hover` and `highlight` (with an optional `label`, at most 200
+characters). `highlight` only shows the user an element: it scrolls it to the middle of the view and
+draws an orange frame around it for 20 seconds, also on a disabled control, and a new highlight
+replaces the previous one in that frame. `click` with `"newTab":true` works like Ctrl+click
 on a link: the extension opens the link's http(s) address in a background tab next to the page and
 returns its `newTabId`; the page itself stays where it is. It refuses an element that is not a link.
 It needs only the Page control switch, not the Tabs tool. Each action targets one `ref`, one unique CSS

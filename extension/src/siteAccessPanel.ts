@@ -28,6 +28,18 @@ export async function mountSiteAccess(document: Document, container: HTMLElement
     });
     return node;
   }
+  function siteTable(sites: SiteRequest[], text: (site: SiteRequest) => string): HTMLTableElement {
+    const table = document.createElement("table");
+    table.className = "sites";
+    for (const site of sites) {
+      const row = table.insertRow();
+      row.insertCell().textContent = text(site);
+      const remove = button("Remove", () => send("remove", { origin: site.origin }));
+      remove.className = "compact";
+      row.insertCell().append(remove);
+    }
+    return table;
+  }
   async function approve(origin: string, id: string | null): Promise<void> {
     const requested = permissions.request({ origins: [hostPattern(origin)] });
     const started = send("approve-start", { origin, id });
@@ -78,29 +90,14 @@ export async function mountSiteAccess(document: Document, container: HTMLElement
       empty.textContent = "No sites approved.";
       container.append(empty);
     }
-    for (const site of approved) {
-      const row = document.createElement("div");
-      row.className = "tool";
-      const origin = document.createElement("p");
-      origin.textContent = site.origin;
-      row.append(origin, button("Remove", () => send("remove", { origin: site.origin })));
-      container.append(row);
-    }
+    else container.append(siteTable(approved, site => site.origin));
     const previous = data.sites.filter(site => site.status === "denied" || site.status === "expired");
     if (previous.length) {
       const history = document.createElement("details");
       history.open = historyOpen;
       const summary = document.createElement("summary");
       summary.textContent = `Previous requests (${previous.length})`;
-      history.append(summary);
-      for (const site of previous) {
-        const row = document.createElement("div");
-        row.className = "tool";
-        const text = document.createElement("p");
-        text.textContent = `${site.origin}: ${site.status}`;
-        row.append(text, button("Remove", () => send("remove", { origin: site.origin })));
-        history.append(row);
-      }
+      history.append(summary, siteTable(previous, site => `${site.origin}: ${site.status}`));
       container.append(history);
     }
     const current = document.createElement("p");

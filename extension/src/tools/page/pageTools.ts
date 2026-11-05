@@ -57,7 +57,7 @@ function locatorFrom(args: Record<string, unknown>): PageLocator | ToolFailure |
 
 function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string, unknown>): PageCommand | ToolFailure {
   const allowed = ["tabId", "frameId", "ref", "selector", "role", "name", ...(operation === "snapshot" ? ["limit"]
-    : operation === "read" ? ["limit", "format"] : ["action", "text", "values", "checked", "key", "x", "y", "newTab"])];
+    : operation === "read" ? ["limit", "format"] : ["action", "text", "values", "checked", "key", "x", "y", "newTab", "label"])];
   if (Object.keys(args).some(key => !allowed.includes(key)) || args.frameId !== undefined && !integer(args.frameId))
     return invalid("Unknown argument or invalid frameId. Use the page tool's documented arguments.");
   const locator = locatorFrom(args);
@@ -82,6 +82,9 @@ function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string
     if (args.newTab !== undefined && (args.action !== "click" || typeof args.newTab !== "boolean"))
       return invalid("newTab is a boolean option of the click action.");
     command.newTab = args.newTab as boolean | undefined;
+    if (args.label !== undefined && (args.action !== "highlight" || typeof args.label !== "string" || args.label.length > 200))
+      return invalid("label is an optional string of the highlight action, at most 200 characters.");
+    command.label = args.label as string | undefined;
     switch (command.action) {
       case "fill": case "type":
         if (typeof args.text !== "string" || args.text.length > 100_000)
@@ -109,8 +112,8 @@ function commandFrom(operation: "snapshot" | "read" | "act", args: Record<string
         command.x = args.x as number | undefined;
         command.y = args.y as number | undefined;
         break;
-      case "click": case "hover": break;
-      default: return invalid("Unknown action. Use click, fill, type, select, check, press, scroll or hover.");
+      case "click": case "hover": case "highlight": break;
+      default: return invalid("Unknown action. Use click, fill, type, select, check, press, scroll, hover or highlight.");
     }
   } else throw new Error("Unknown page operation.");
   return command;

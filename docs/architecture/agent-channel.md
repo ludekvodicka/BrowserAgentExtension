@@ -250,6 +250,10 @@ that require real input may refuse them, and CSS hover is not emulated. For the 
 page script returns the closest link's http(s) address and the background calls `chrome.tabs.create`
 with `active:false` and the page as `openerTabId`. It is part of `page.act` and needs no
 `browser.tabs.open` grant, because an ordinary click on the same link could navigate the page there.
+`highlight` is the one action that operates nothing: it appends a fixed, `pointer-events:none` frame
+(`data-browser-agent-highlight`) to the target's own document and follows the element with
+`requestAnimationFrame` for 20 seconds. It skips the disabled check, because pointing at a control the
+user cannot press yet is a valid answer to "where is it".
 
 Site requests live in per-profile local storage as one record per exact origin with caller,
 request ID, timestamps and status. A single background writer serializes updates. Requests expire

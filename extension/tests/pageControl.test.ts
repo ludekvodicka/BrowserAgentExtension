@@ -224,6 +224,24 @@ it("fills native fields and rich text, selects options, checks boxes, types and 
   expect(p.dom.window.scrollBy).toHaveBeenCalledWith({ left: 0, top: 200, behavior: "instant" });
 });
 
+it("highlights one element at a time, disabled ones too, with an optional label and without operating it", async () => {
+  const p = page('<button type="button" disabled>Renew</button><button type="button">Delete</button>');
+  const clicked = vi.fn();
+  p.document.addEventListener("click", clicked);
+  const highlight = (selector: string, label?: string) => p.execute(command({ operation: "act", action: "highlight", locator: { selector }, label }));
+  const boxes = () => p.document.querySelectorAll("[data-browser-agent-highlight]");
+  expect(highlight("button[disabled]", "Renew is here")).toMatchObject({ ok: true, status: "highlighted" });
+  expect(boxes()).toHaveLength(1);
+  expect(boxes()[0].textContent).toBe("Renew is here");
+  expect(highlight("button:not([disabled])")).toMatchObject({ ok: true });
+  expect(boxes()).toHaveLength(1);
+  expect(boxes()[0].textContent).toBe("");
+  expect(clicked).not.toHaveBeenCalled();
+  const act = pageTools.find(tool => tool.id === "page.act")!;
+  expect(await act.run({ tabId: 7, action: "click", selector: "button", label: "x" })).toMatchObject({ code: "tool_args_invalid" });
+  expect(await act.run({ tabId: 7, action: "highlight", selector: "button", label: "x".repeat(201) })).toMatchObject({ code: "tool_args_invalid" });
+});
+
 it("reads bounded text and sanitized HTML without script or hidden-field content", () => {
   const p = page('<main>Ticket <b>status</b><span hidden>hidden</span><script>untrusted_code()</script><input type="hidden" value="hidden-data"></main>');
   expect(p.execute(command({ operation: "read", format: "text", limit: 6 }))).toMatchObject({ ok: true, content: "Ticket", truncated: true });
