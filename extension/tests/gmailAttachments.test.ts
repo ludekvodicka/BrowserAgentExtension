@@ -11,16 +11,23 @@ const thread: GmailThreadPageResult = { kind: "thread", subject: "Fixture", mess
   message([{ id: "1a17772c61c9a95d:0.2", name: "a/b:c?.pdf", size: "3K" }]),
 ] };
 
+// Tab 3 was viewed last; tab 5 shows another conversation, opened by an agent.
+const otherInfo: GmailTabInfo = { account: "a@example.com", ik: "ab12", user: "0", threadId: "thread-f:77" };
+const tabUrls = new Map([[3, "https://mail.google.com/mail/u/0/#inbox/a"], [5, "https://mail.google.com/mail/u/0/#search/x/b"], [6, "https://example.com/"]]);
+
 function setup(item: Partial<chrome.downloads.DownloadItem> = { state: "complete", fileSize: 100 }) {
-  const query = vi.fn(async () => [{ id: 3, lastAccessed: 1 }]);
-  const executeScript = vi.fn(async (injection: { world?: string }) => [{ result: injection.world === "MAIN" ? tabInfo : thread }]);
+  const query = vi.fn(async () => [{ id: 3, lastAccessed: 9 }, { id: 5, lastAccessed: 1 }]);
+  const get = vi.fn(async (tabId: number) => ({ id: tabId, url: tabUrls.get(tabId), discarded: false }));
+  const executeScript = vi.fn(async (injection: { world?: string; target: { tabId: number } }) =>
+    [{ result: injection.world === "MAIN" ? injection.target.tabId === 5 ? otherInfo : tabInfo : thread }]);
   const download = vi.fn(async (_options: chrome.downloads.DownloadOptions) => download.mock.calls.length);
   const search = vi.fn(async ({ id }: { id?: number }) => [{ id, filename: `C:\\Downloads\\file${id}`, ...item }]);
-  vi.stubGlobal("chrome", { tabs: { query }, scripting: { executeScript }, downloads: { download, search } });
-  return { query, download, search };
+  vi.stubGlobal("chrome", { tabs: { query, get }, scripting: { executeScript }, downloads: { download, search } });
+  return { query, get, executeScript, download, search };
 }
 
-it.each([[{ ids: [] }], [{ ids: ["../x"] }], [{ ids: "1a17336a31a58f16:0.1" }], [{ account: "a@example.com", folder: "x" }], [[]]])("refuses args %j before touching a tab", async args => {
+it.each([[{ ids: [] }], [{ ids: ["../x"] }], [{ ids: "1a17336a31a58f16:0.1" }], [{ account: "a@example.com", folder: "x" }], [[]], [{ tabId: "5" }], [{ threadId: "thread-f:9" }]])(
+  "refuses args %j before touching a tab", async args => {
   const s = setup();
   expect(await gmailAttachments.run(args)).toMatchObject({ ok: false, code: "tool_args_invalid" });
   expect(s.query).not.toHaveBeenCalled();
@@ -28,13 +35,47 @@ it.each([[{ ids: [] }], [{ ids: ["../x"] }], [{ ids: "1a17336a31a58f16:0.1" }], 
 
 it("saves every attachment of the open conversation through the browser's downloads", async () => {
   const s = setup();
-  expect(await gmailAttachments.run(undefined)).toEqual({ ok: true, value: { account: "a@example.com", threadId: "thread-f:42", subject: "Fixture", saved: [
+  expect(await gmailAttachments.run(undefined)).toEqual({ ok: true, value: { account: "a@example.com", tabId: 3, threadId: "thread-f:42", subject: "Fixture", saved: [
     { id: "1a17336a31a58f16:0.1", name: "card.jpg", state: "complete", path: "C:\\Downloads\\file1", bytes: 100 },
     { id: "1a17772c61c9a95d:0.2", name: "a/b:c?.pdf", state: "complete", path: "C:\\Downloads\\file2", bytes: 100 },
   ] } });
   expect(s.download).toHaveBeenNthCalledWith(1, { url: "https://mail.google.com/mail/u/0/?ui=2&ik=ab12&view=att&th=1a17336a31a58f16&attid=0.1&disp=safe&zw",
     filename: "browser-agent/gmail/42/card.jpg", conflictAction: "uniquify", saveAs: false });
   expect(s.download).toHaveBeenNthCalledWith(2, expect.objectContaining({ filename: "browser-agent/gmail/42/a_b_c_.pdf" }));
+});
+
+it("saves the attachments of the tab named by tabId although another tab was viewed later", async () => {
+  const s = setup();
+  expect(await gmailAttachments.run({ tabId: 5, ids: ["1a17336a31a58f16:0.1"] })).toMatchObject({ ok: true, value: { tabId: 5, threadId: "thread-f:77",
+    saved: [{ name: "card.jpg", state: "complete" }] } });
+  expect(s.query).not.toHaveBeenCalled();
+  expect(s.executeScript.mock.calls.every(([injection]) => injection.target.tabId === 5)).toBe(true);
+  expect(s.download).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ filename: "browser-agent/gmail/77/card.jpg" }));
+});
+
+it("refuses a named tab that is not Gmail, of another account, or without an open conversation, before any download", async () => {
+  const s = setup();
+  expect(await gmailAttachments.run({ tabId: 6 })).toMatchObject({ ok: false, code: "tab_missing" });
+  expect(await gmailAttachments.run({ tabId: 5, account: "b@gmail.com" })).toMatchObject({ ok: false, code: "tool_args_invalid" });
+  otherInfo.threadId = null;
+  try {
+    expect(await gmailAttachments.run({ tabId: 5 })).toMatchObject({ ok: false, code: "tab_not_ready" });
+  } finally {
+    otherInfo.threadId = "thread-f:77";
+  }
+  expect(s.download).not.toHaveBeenCalled();
+});
+
+it("saves the attachments of a conversation named by threadId without a tab that shows it", async () => {
+  const s = setup();
+  tabInfo.threadId = null;
+  try {
+    expect(await gmailAttachments.run({ account: "a@example.com", threadId: "thread-f:99", ids: ["1a17336a31a58f16:0.1"] })).toMatchObject({ ok: true,
+      value: { tabId: 3, threadId: "thread-f:99", saved: [{ name: "card.jpg" }] } });
+    expect(s.download).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ filename: "browser-agent/gmail/99/card.jpg" }));
+  } finally {
+    tabInfo.threadId = "thread-f:42";
+  }
 });
 
 it("starts every download before it waits for any", async () => {

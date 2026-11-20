@@ -1,5 +1,5 @@
 import type { BrowserTool } from "../../browserTool.ts";
-import { accountArgs, openConversationTab, readThread } from "./gmailTabs.ts";
+import { conversationArgs, conversationTab, readThread } from "./gmailTabs.ts";
 
 export const gmailThread: BrowserTool = {
   id: "appdata.gmail.thread",
@@ -9,12 +9,15 @@ export const gmailThread: BrowserTool = {
   hosts: ["https://mail.google.com/*"],
   sensitive: false,
   async run(args = {}) {
-    const account = accountArgs(args);
-    if (account === null || Object.keys(args as object).some(key => key !== "account"))
-      return { ok: false, code: "tool_args_invalid", message: "Use no --args, or --args with account (the Gmail address whose open conversation to read)." };
+    const selection = conversationArgs(args);
+    if (selection === null || Object.keys(args as object).some(key => key !== "account" && key !== "tabId" && key !== "threadId"))
+      return { ok: false, code: "tool_args_invalid", message: "Use no --args, or --args with account (the Gmail address whose open conversation to read), tabId (a Gmail tab from page.tabs) and threadId (from appdata.gmail.search, beside account or tabId)." };
     try {
-      const tab = await openConversationTab(account);
-      return "ok" in tab ? tab : { ok: true, value: await readThread(tab) };
+      const tab = await conversationTab(selection);
+      if ("ok" in tab)
+        return tab;
+      const thread = await readThread(tab);
+      return "ok" in thread ? thread : { ok: true, value: thread };
     } catch {
       return { ok: false, code: "extension_error", message: "Could not read Gmail. Check the open Gmail tab and retry, or reload the extension." };
     }

@@ -19,7 +19,8 @@ the agent must leave the final Send or Submit to you.
 | Slack | Read workspace data | Channel history, thread replies, channel and user details from the signed-in workspace, read-only |
 | Slack | Session cookies | The Slack session cookies, written only into a file the agent names, never printed |
 | Outlook | Read mail | Mail folders and their messages from Outlook on the web, read-only |
-| Gmail | Read the open conversation | The text of the Gmail conversation open in a tab, read-only |
+| Gmail | Search conversations | The conversations a Gmail search finds, shown in a Gmail tab the agent names: thread ID, subject, senders, date, read-only |
+| Gmail | Read the open conversation | The text of the Gmail conversation open in a tab, or of one conversation the search found, read-only |
 | Gmail | Save attachments | The attachments of that conversation, saved into the browser's download folder |
 | Gmail | Open a new draft | A compose window filled with To, Cc, Bcc, subject, plain text and attached files. You send it |
 | Gmail | Draft a reply | A reply to the open conversation, to everyone, or to the latest message from one sender in it, filled with text and attached files. You send it |
@@ -62,7 +63,7 @@ Click the Browser Agent icon in the toolbar to see and change everything for the
 |---|---|
 | <img src="docs/images/popup-overview.png" width="360" alt="Overview tab"><br>**Overview:** connection state, profile label, Agent access, enabled tools and the latest requests. | <img src="docs/images/popup-not-connected.png" width="360" alt="Overview tab without a native host"><br>**Not connected:** the native host is not installed yet. The popup shows the one command that installs it. |
 | <img src="docs/images/popup-slack.png" width="360" alt="Slack tab"><br>**Slack:** read-only workspace data and the session cookies. | <img src="docs/images/popup-outlook.png" width="360" alt="Outlook tab"><br>**Outlook:** read mail in Outlook on the web. |
-| <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** read the open conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab, and close a tab the agent opened. These tools need no site permission. |
+| <img src="docs/images/popup-gmail.png" width="360" alt="Gmail tab"><br>**Gmail:** search conversations, read the open or a found conversation, save its attachments, prepare a draft or a reply. | <img src="docs/images/popup-tabs.png" width="360" alt="Tabs tab"><br>**Tabs:** open a web page in a new tab, and close a tab the agent opened. These tools need no site permission. |
 | <img src="docs/images/popup-meetings.png" width="360" alt="Meetings tab"><br>**Meetings:** list Google Meet, Zoom and Teams meeting tabs for a recorder. | <img src="docs/images/popup-access.png" width="360" alt="Access tab"><br>**Access:** the profile label the agent uses to pick this profile, and the Agent access switch. |
 | <img src="docs/images/popup-page-control.png" width="360" alt="Page control tab"><br>**Page control:** a pending site request to approve or deny, the granted sites, Allow this site, and the page control switch. | <img src="docs/images/popup-requests.png" width="360" alt="Requests tab"><br>**Requests:** the last 20 requests with their caller and result. A refusal is shown in red. |
 

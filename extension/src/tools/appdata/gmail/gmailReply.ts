@@ -1,7 +1,7 @@
 import type { BrowserTool } from "../../browserTool.ts";
-import { accountArgs, addressPattern, fillCompose, openConversationTab } from "./gmailTabs.ts";
+import { addressPattern, conversationArgs, conversationTab, fillCompose } from "./gmailTabs.ts";
 
-const allowedKeys = new Set(["account", "body", "replyAll", "from", "replaceDraft"]);
+const allowedKeys = new Set(["account", "tabId", "body", "replyAll", "from", "replaceDraft"]);
 
 // Opens Gmail's own reply below the open conversation, types the body and attaches the files; Gmail saves the draft. The user sends it.
 export const gmailReply: BrowserTool = {
@@ -13,23 +13,23 @@ export const gmailReply: BrowserTool = {
   sensitive: false,
   acceptsFiles: true,
   async run(args = {}, files = []) {
-    const account = accountArgs(args);
+    const selection = conversationArgs(args);
     const fields = args as Record<string, unknown>;
-    if (account === null || Object.keys(fields).some(key => !allowedKeys.has(key))
+    if (selection === null || Object.keys(fields).some(key => !allowedKeys.has(key))
       || !(fields.body === undefined || typeof fields.body === "string" && fields.body.length <= 100_000)
       || !(fields.replyAll === undefined || typeof fields.replyAll === "boolean")
       || !(fields.from === undefined || typeof fields.from === "string" && addressPattern.test(fields.from) && fields.replyAll !== true)
       || !(fields.replaceDraft === undefined || typeof fields.replaceDraft === "boolean" && (!fields.replaceDraft || fields.from !== undefined)))
-      return { ok: false, code: "tool_args_invalid", message: "Use --args with optional account, body (plain text), and either replyAll (true for reply to all) or from (the sender address of the message to reply to), with replaceDraft (true to discard the open drafts to that sender first) only beside from; attach files with --file." };
+      return { ok: false, code: "tool_args_invalid", message: "Use --args with optional account, tabId (a Gmail tab from page.tabs), body (plain text), and either replyAll (true for reply to all) or from (the sender address of the message to reply to), with replaceDraft (true to discard the open drafts to that sender first) only beside from; attach files with --file." };
     try {
-      const tab = await openConversationTab(account);
+      const tab = await conversationTab(selection);
       if ("ok" in tab)
         return tab;
       const from = (fields.from as string | undefined) ?? null;
       const filled = await fillCompose(tab.tabId, fields.replyAll ? "replyAll" : "reply", (fields.body as string | undefined) || null, files, from, fields.replaceDraft === true);
       if ("ok" in filled)
         return filled;
-      return { ok: true, value: { account: tab.info.account, threadId: tab.info.threadId, replyAll: fields.replyAll === true, ...from && { from },
+      return { ok: true, value: { account: tab.info.account, tabId: tab.tabId, threadId: tab.info.threadId, replyAll: fields.replyAll === true, ...from && { from },
         ...fields.replaceDraft === true && { discarded: filled.discarded }, bodyLength: (fields.body as string | undefined)?.length ?? 0, attached: filled.attached } };
     } catch {
       return { ok: false, code: "extension_error", message: "Could not prepare the Gmail reply. Check the open Gmail tab and retry, or reload the extension." };

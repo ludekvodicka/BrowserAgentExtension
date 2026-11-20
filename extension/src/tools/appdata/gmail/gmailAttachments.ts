@@ -1,5 +1,5 @@
 import type { BrowserTool } from "../../browserTool.ts";
-import { accountArgs, openConversationTab, readThread } from "./gmailTabs.ts";
+import { conversationArgs, conversationTab, readThread } from "./gmailTabs.ts";
 
 const idPattern = /^[0-9a-f]{8,24}:[0-9.]{1,20}$/;
 // The native host fails a request 15 seconds after it arrives; a download still running then is reported as such.
@@ -30,21 +30,23 @@ export const gmailAttachments: BrowserTool = {
   sensitive: false,
   async run(args = {}) {
     const deadline = Date.now() + waitMs;
-    const account = accountArgs(args);
-    const ids = account === null ? null : (args as Record<string, unknown>).ids;
-    if (account === null || Object.keys(args as object).some(key => key !== "account" && key !== "ids")
+    const selection = conversationArgs(args);
+    const ids = selection === null ? null : (args as Record<string, unknown>).ids;
+    if (selection === null || Object.keys(args as object).some(key => !["account", "tabId", "threadId", "ids"].includes(key))
       || !(ids === undefined || Array.isArray(ids) && ids.length > 0 && ids.length <= 50 && ids.every(id => typeof id === "string" && idPattern.test(id))))
-      return { ok: false, code: "tool_args_invalid", message: "Use no --args, or --args with account and ids (attachment ids from appdata.gmail.thread)." };
+      return { ok: false, code: "tool_args_invalid", message: "Use no --args, or --args with account, tabId (a Gmail tab from page.tabs), threadId (from appdata.gmail.search, beside account or tabId) and ids (attachment ids from appdata.gmail.thread)." };
     try {
-      const tab = await openConversationTab(account);
+      const tab = await conversationTab(selection);
       if ("ok" in tab)
         return tab;
       const thread = await readThread(tab);
+      if ("ok" in thread)
+        return thread;
       const listed = thread.messages.flatMap(message => message.attachments).filter(attachment => attachment.id !== null);
       const wanted = ids === undefined ? listed : listed.filter(attachment => (ids as string[]).includes(attachment.id!));
       const missing = ids === undefined ? [] : (ids as string[]).filter(id => !listed.some(attachment => attachment.id === id));
       if (missing.length)
-        return { ok: false, code: "tool_args_invalid", message: `The open conversation has no attachment ${missing.join(", ")}; read appdata.gmail.thread for its ids.` };
+        return { ok: false, code: "tool_args_invalid", message: `The conversation has no attachment ${missing.join(", ")}; read appdata.gmail.thread for its ids.` };
       const folder = `browser-agent/gmail/${thread.threadId.replace(/^thread-[af]:/, "")}`;
       // All downloads start at once: one by one, a conversation with dozens of files outlasts the host's limit.
       const downloads = await Promise.all(wanted.map(attachment => {
@@ -53,7 +55,7 @@ export const gmailAttachments: BrowserTool = {
         return chrome.downloads.download({ url, filename: `${folder}/${safeFileName(attachment.name)}`, conflictAction: "uniquify", saveAs: false });
       }));
       const saved: Saved[] = await Promise.all(wanted.map(async (attachment, index) => ({ id: attachment.id!, name: attachment.name, ...await settle(downloads[index], deadline) })));
-      return { ok: true, value: { account: thread.account, threadId: thread.threadId, subject: thread.subject, saved } };
+      return { ok: true, value: { account: thread.account, tabId: thread.tabId, threadId: thread.threadId, subject: thread.subject, saved } };
     } catch {
       return { ok: false, code: "extension_error", message: "Could not save the Gmail attachments. Check the open Gmail tab and retry, or reload the extension." };
     }

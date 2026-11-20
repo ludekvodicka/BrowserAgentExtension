@@ -7,29 +7,72 @@ import { gmailThreadPage } from "../src/tools/appdata/gmail/gmailThreadPage.ts";
 import type { GmailThreadPageResult } from "../src/tools/appdata/gmail/gmailThreadPage.ts";
 
 afterEach(() => vi.unstubAllGlobals());
-const thread: GmailThreadPageResult = { kind: "thread", subject: "Fixture subject", messages: [] };
+const message = { from: "Ann <ann@example.com>", date: "d", recipients: [], body: "Hi", attachments: [] };
+const thread: GmailThreadPageResult = { kind: "thread", subject: "Fixture subject", messages: [message] };
 const info = (account: string | null, threadId: string | null): GmailTabInfo => ({ account, ik: "ab12", user: "0", threadId });
 
-function setup(tabs: { id: number; lastAccessed: number; info: GmailTabInfo }[], page: GmailThreadPageResult = thread) {
+type Tab = { id: number; lastAccessed: number; info: GmailTabInfo; url?: string; discarded?: boolean };
+
+function setup(tabs: Tab[], page: GmailThreadPageResult = thread) {
   const query = vi.fn(async () => tabs.map(({ id, lastAccessed }) => ({ id, lastAccessed })));
+  const get = vi.fn(async (tabId: number) => {
+    const tab = tabs.find(candidate => candidate.id === tabId);
+    if (!tab)
+      throw new Error(`No tab with id: ${tabId}.`);
+    return { id: tab.id, url: tab.url ?? "https://mail.google.com/mail/u/0/#inbox", discarded: tab.discarded ?? false };
+  });
   const executeScript = vi.fn(async (injection: { target: { tabId: number }; world?: string }) =>
     [{ result: injection.world === "MAIN" ? tabs.find(tab => tab.id === injection.target.tabId)!.info : page }]);
-  vi.stubGlobal("chrome", { tabs: { query }, scripting: { executeScript } });
-  return { query, executeScript };
+  vi.stubGlobal("chrome", { tabs: { query, get }, scripting: { executeScript } });
+  return { query, get, executeScript };
 }
 
-it.each([[[]], ["x"], [{ account: "no-address" }], [{ account: 5 }], [{ account: "a@b.cz", folder: "inbox" }]])("refuses args %j before touching a tab", async args => {
+it.each([[[]], ["x"], [{ account: "no-address" }], [{ account: 5 }], [{ account: "a@b.cz", folder: "inbox" }], [{ tabId: "3" }], [{ tabId: -1 }], [{ tabId: 1.5 }],
+  [{ threadId: "thread-f:1" }], [{ account: "a@b.cz", threadId: "msg-f:1" }], [{ tabId: 1, threadId: "thread-f:1&x" }]])(
+  "refuses args %j before touching a tab", async args => {
   const s = setup([]);
   expect(await gmailThread.run(args)).toMatchObject({ ok: false, code: "tool_args_invalid" });
   expect(s.query).not.toHaveBeenCalled();
+  expect(s.get).not.toHaveBeenCalled();
 });
 
 it("reads the most recently viewed open conversation in an isolated script", async () => {
   const s = setup([{ id: 1, lastAccessed: 50, info: info("a@example.com", "thread-f:1") }, { id: 2, lastAccessed: 90, info: info("b@gmail.com", "thread-f:2") },
     { id: 3, lastAccessed: 99, info: info("a@example.com", null) }]);
-  expect(await gmailThread.run({})).toEqual({ ok: true, value: { account: "b@gmail.com", threadId: "thread-f:2", subject: "Fixture subject", messages: [] } });
+  expect(await gmailThread.run({})).toEqual({ ok: true, value: { account: "b@gmail.com", tabId: 2, threadId: "thread-f:2", subject: "Fixture subject", messages: [message] } });
   expect(s.query).toHaveBeenCalledExactlyOnceWith({ url: "https://mail.google.com/mail/*", discarded: false });
+  expect(s.get).not.toHaveBeenCalled();
   expect(s.executeScript).toHaveBeenLastCalledWith({ target: { tabId: 2 }, func: gmailThreadPage, args: ["0", "ab12", "thread-f:2"] });
+});
+
+it("reads exactly the tab named by tabId although another tab was viewed later", async () => {
+  const s = setup([{ id: 1, lastAccessed: 50, info: info("a@example.com", "thread-f:1") }, { id: 2, lastAccessed: 90, info: info("a@example.com", "thread-f:2") }]);
+  expect(await gmailThread.run({ tabId: 1 })).toEqual({ ok: true, value: { account: "a@example.com", tabId: 1, threadId: "thread-f:1", subject: "Fixture subject", messages: [message] } });
+  expect(s.query).not.toHaveBeenCalled();
+  expect(s.executeScript).toHaveBeenLastCalledWith({ target: { tabId: 1 }, func: gmailThreadPage, args: ["0", "ab12", "thread-f:1"] });
+  expect(await gmailThread.run({ tabId: 1, account: "A@example.com" })).toMatchObject({ ok: true, value: { tabId: 1, threadId: "thread-f:1" } });
+});
+
+it("refuses a named tab that is not a Gmail tab without reading it", async () => {
+  for (const tab of [{ id: 7, lastAccessed: 1, info: info("a@example.com", "thread-f:1"), url: "https://example.com/mail/" },
+    { id: 7, lastAccessed: 1, info: info("a@example.com", "thread-f:1"), url: "https://mail.google.com.evil.example/mail/" },
+    { id: 7, lastAccessed: 1, info: info("a@example.com", "thread-f:1"), discarded: true }]) {
+    const s = setup([tab]);
+    expect(await gmailThread.run({ tabId: 7 })).toMatchObject({ ok: false, code: "tab_missing", message: expect.stringContaining("Tab 7") });
+    expect(s.executeScript).not.toHaveBeenCalled();
+  }
+  setup([]);
+  expect(await gmailThread.run({ tabId: 8 })).toMatchObject({ ok: false, code: "tab_missing", message: expect.stringContaining("Tab 8") });
+});
+
+it("refuses a named tab that is signed out, of another account, or without an open conversation", async () => {
+  setup([{ id: 1, lastAccessed: 1, info: info(null, null) }]);
+  expect(await gmailThread.run({ tabId: 1 })).toMatchObject({ ok: false, code: "not_signed_in" });
+  setup([{ id: 1, lastAccessed: 1, info: info("a@example.com", "thread-f:1") }]);
+  expect(await gmailThread.run({ tabId: 1, account: "b@gmail.com" })).toMatchObject({ ok: false, code: "tool_args_invalid",
+    message: expect.stringContaining("a@example.com, not b@gmail.com") });
+  setup([{ id: 1, lastAccessed: 1, info: info("a@example.com", null) }, { id: 2, lastAccessed: 9, info: info("a@example.com", "thread-f:2") }]);
+  expect(await gmailThread.run({ tabId: 1 })).toMatchObject({ ok: false, code: "tab_not_ready", message: expect.stringContaining("Tab 1") });
 });
 
 it("selects the account without regard to letter case", async () => {
@@ -53,9 +96,32 @@ it("asks for an open conversation when the account's tabs show none", async () =
 it("contains page failures and unknown results", async () => {
   const tabs = [{ id: 1, lastAccessed: 50, info: info("a@example.com", "thread-f:1") }];
   setup(tabs, { kind: "extension_error" });
-  expect(await gmailThread.run({})).toMatchObject({ ok: false, code: "extension_error" });
+  expect(await gmailThread.run({})).toMatchObject({ ok: false, code: "extension_error", message: expect.stringContaining("thread-f:1") });
   setup(tabs, { kind: "unexpected" } as unknown as GmailThreadPageResult);
   expect(await gmailThread.run({})).toMatchObject({ ok: false, code: "extension_error" });
+});
+
+it("reads a conversation by threadId through the account's last viewed tab, which needs no open conversation", async () => {
+  const s = setup([{ id: 1, lastAccessed: 50, info: info("a@example.com", "thread-f:1") }, { id: 2, lastAccessed: 90, info: info("a@example.com", null) },
+    { id: 3, lastAccessed: 99, info: info("b@gmail.com", null) }]);
+  expect(await gmailThread.run({ account: "a@example.com", threadId: "thread-f:7" })).toEqual({ ok: true,
+    value: { account: "a@example.com", tabId: 2, threadId: "thread-f:7", subject: "Fixture subject", messages: [message] } });
+  expect(s.executeScript).toHaveBeenLastCalledWith({ target: { tabId: 2 }, func: gmailThreadPage, args: ["0", "ab12", "thread-f:7"] });
+});
+
+it("reads a conversation by threadId through the named tab, and refuses a tab that is not Gmail or of another account", async () => {
+  const s = setup([{ id: 1, lastAccessed: 50, info: info("a@example.com", null) }, { id: 2, lastAccessed: 90, info: info("a@example.com", "thread-f:2") },
+    { id: 3, lastAccessed: 1, info: info("a@example.com", null), url: "https://example.com/" }]);
+  expect(await gmailThread.run({ tabId: 1, threadId: "thread-a:r-55" })).toMatchObject({ ok: true, value: { tabId: 1, threadId: "thread-a:r-55" } });
+  expect(s.query).not.toHaveBeenCalled();
+  expect(await gmailThread.run({ tabId: 3, threadId: "thread-f:7" })).toMatchObject({ ok: false, code: "tab_missing" });
+  expect(await gmailThread.run({ tabId: 1, account: "b@gmail.com", threadId: "thread-f:7" })).toMatchObject({ ok: false, code: "tool_args_invalid" });
+});
+
+it("refuses a threadId that Gmail shows no message for, and names the account", async () => {
+  setup([{ id: 1, lastAccessed: 50, info: info("a@example.com", null) }], { kind: "thread", subject: "", messages: [] });
+  expect(await gmailThread.run({ account: "a@example.com", threadId: "thread-f:7" })).toMatchObject({ ok: false, code: "tool_args_invalid",
+    message: expect.stringContaining("a@example.com") });
 });
 
 it("tab page reads the account, request key, user index and only the visible conversation", () => {

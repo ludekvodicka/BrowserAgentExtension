@@ -87,15 +87,30 @@ Reasons:
 - **Gmail conversation:** `appdata.gmail.thread` reads the conversation open in a `mail.google.com`
   tab. A main-world function reads the signed-in address and the request key `ik` from Gmail's
   `GLOBALS` (indexes 10 and 9), the user index from `/mail/u/<n>/` and the thread ID from the visible
-  `h2[data-thread-perm-id]`; Gmail keeps earlier conversations hidden in the page. Without an `account`
-  argument the tool takes the tab with an open conversation that the user viewed last
-  (`tab.lastAccessed`). An isolated script then fetches the thread's print view
+  `h2[data-thread-perm-id]`; Gmail keeps earlier conversations hidden in the page. With a `tabId`
+  argument the tool reads exactly that tab and refuses when it is not a `mail.google.com/mail/` tab
+  (`tab_missing`), shows no signed-in account (`not_signed_in`), shows another account than a given
+  `account` (`tool_args_invalid`; `account` beside `tabId` only checks the tab), or shows no open
+  conversation (`tab_not_ready`); it never falls back to another tab. Without `tabId` the tool takes
+  the tab with an open conversation that the user viewed last (`tab.lastAccessed`), of `account`
+  when one is given. The value carries the `tabId` it read. Decision: an agent that opens a
+  conversation through Page control does not change `lastAccessed`, so without `tabId` another
+  Gmail tab of the user won and the agent read the wrong conversation. A `tabId` from `page.tabs`
+  gives no new access, because the tool already holds the `https://mail.google.com/*` grant.
+  With `threadId` (`thread-f:<n>` or `thread-a:r<n>`, beside `account` or `tabId`) no tab needs to
+  show the conversation: the tool takes the session (`ik`, user index) of the named tab or of the
+  account's last viewed tab and reads that thread. A thread ID belongs to one account, so `threadId`
+  alone refuses; Gmail answers a foreign or unknown ID with a failed or empty print view, which
+  refuses and names the thread and account. The decimal number of `thread-f:<n>` equals Gmail's hex
+  thread ID (checked live on one conversation).
+  An isolated script then fetches the thread's print view
   (`view=pt&permthid=thread-f:<n>`), which lists every message expanded, and turns it into sender,
   date, recipient lines, plain-text body and attachment names. It parses in the isolated world
   because Gmail's Trusted Types policy blocks `DOMParser` in the main world. Dates and recipient
   labels stay in Gmail's display language. Each attachment carries an `id` `<message>:<attid>` taken
   from its print-view link.
-- **Gmail attachments:** `appdata.gmail.attachments` selects the same tab, reads the same print view,
+- **Gmail attachments:** `appdata.gmail.attachments` selects the tab and thread in the same way
+  (`threadId`, `tabId`, else the last viewed), reports the tab as `tabId`, reads the same print view,
   and passes each attachment's `view=att&disp=safe` URL to `chrome.downloads`, into
   `browser-agent/gmail/<thread number>/` of the download folder. The browser's own download carries
   the Gmail session and follows Gmail's redirect to its attachment host, so no file content passes
@@ -105,6 +120,25 @@ Reasons:
   20 seconds), waits until 12 seconds after the call arrived, within the host's 15-second request
   limit, and reports a download still running as `in_progress`. Saving files is a separate
   switch from reading, and it needs the `downloads` permission.
+- **Gmail search:** `appdata.gmail.search` takes a required `tabId` and a Gmail `query` (search
+  syntax, one line), and shows that search in the named tab as the search box would, by setting
+  `location.hash` to `#search/<query>` from an isolated script. It waits until the visible result
+  list (`div[role="main"] tr.zA`) is replaced by new row elements, or Gmail's empty-result cell
+  (`td.TC`) shows, and the thread IDs of the rows hold still for one poll (250 ms); a tab that
+  already shows the same search is read without navigation. After 10 seconds it refuses with
+  `tab_not_ready`, inside the host's 15-second limit. Gmail keeps earlier lists in the page hidden,
+  so only visible rows count. Each row gives `threadId` (`data-thread-id`), `subject`, `from`
+  (sender `email`/`name` attributes), `date` (the date cell's `title`), `snippet` (up to 300
+  characters), `unread` (row class `zE`) and `hasAttachment` (an image in the attachment cell
+  `td.yf`). Only Gmail's first result page is read (its page size, 50 by default); `limit` (1 to
+  100, default 50) cuts it and sets `truncated`, and `range` is Gmail's own counter text, for
+  example `1–30 z 30`, in the display language. Decision: the user asked for a way to read many
+  conversations without a page click per conversation. Gmail has no documented search endpoint in
+  the page session (the basic HTML view is gone, the `sync` API is internal), so the tool scripts
+  the page as the reply tool does, and requires `tabId` because the search replaces what that tab
+  shows: an agent names its own tab, never one the user reads. The cost is the same fragility: a
+  Gmail UI change can move these selectors (measured live on 19. 11. 2026: 1.7 s for a new search,
+  0.7 s for the same search again).
 - **Gmail draft:** `appdata.gmail.draft` opens Gmail's own compose page (`/mail/u/<n>/?view=cm&fs=1`)
   with `to`, `cc`, `bcc`, `su` and `body` in the URL, as a new active tab beside the account's Gmail
   tab that the user viewed last; Gmail saves it as a draft. It is the only app data tool that opens a tab. The
@@ -114,7 +148,7 @@ Reasons:
   without display names, because the fields are joined by commas. Files given with `--file` are
   attached after the tab loads, as for a reply below.
 - **Gmail reply:** `appdata.gmail.reply` works in the tab of the open conversation (as
-  `appdata.gmail.thread` selects it). An isolated script presses Gmail's reply or reply-all link
+  `appdata.gmail.thread` selects it, also with `tabId`; the value reports `tabId`). An isolated script presses Gmail's reply or reply-all link
   below the conversation (`span.ams.bkH` / `span.ams.bkI`, class names that do not change with the
   display language), waits for the new message body, and types the text with
   `execCommand("insertText")` and `insertLineBreak`. For files it presses the compose window's attach
@@ -170,6 +204,7 @@ Reasons:
 | Page script registration | `extension/src/pageScripts.ts` |
 | Outlook mail paths, hook and page request | `extension/src/tools/appdata/outlook/outlookMail.ts`, `outlookHook.ts`, `outlookMailPage.ts` |
 | Gmail tab selection, tab reading and print-view parsing | `extension/src/tools/appdata/gmail/gmailTabs.ts`, `gmailThread.ts`, `gmailTabPage.ts`, `gmailThreadPage.ts` |
+| Gmail search in a named tab | `extension/src/tools/appdata/gmail/gmailSearch.ts`, `gmailSearchPage.ts` |
 | Gmail attachment downloads | `extension/src/tools/appdata/gmail/gmailAttachments.ts` |
 | Gmail draft (compose link) | `extension/src/tools/appdata/gmail/gmailDraft.ts` |
 | Gmail reply, compose filling and attaching | `extension/src/tools/appdata/gmail/gmailReply.ts`, `gmailComposePage.ts`, `fillCompose` in `gmailTabs.ts` |
@@ -245,7 +280,10 @@ marks the snapshot truncated and refuses fallback locators whose uniqueness cann
 Input and textarea writes use native value
 setters plus input/change events. Contenteditable writes use `execCommand("insertText")`, allowing
 editors to update their own models. Synthetic keyboard/pointer events remain untrusted; applications
-that require real input may refuse them, and CSS hover is not emulated. For the same reason a
+that require real input may refuse them, and CSS hover is not emulated. Gmail is one: a synthetic
+`press Enter` in its search field does not submit the search (click the search button), and a
+click on an attachment's download button answers `acted` but starts no download; save attachments
+with `appdata.gmail.attachments` and the conversation's `tabId` instead. For the same reason a
 `click` with `newTab` does not dispatch a synthetic Ctrl+click, which the popup blocker stops: the
 page script returns the closest link's http(s) address and the background calls `chrome.tabs.create`
 with `active:false` and the page as `openerTabId`. It is part of `page.act` and needs no

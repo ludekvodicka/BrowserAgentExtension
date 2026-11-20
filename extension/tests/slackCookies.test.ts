@@ -39,6 +39,7 @@ it("real registry is described, denied before reading cookies, then allowed with
     { id: "appdata.slack.cookies", section: "appdata", group: "slack", sensitive: true, enabled: false },
     { id: "appdata.slack.api", section: "appdata", group: "slack", sensitive: false, enabled: false },
     { id: "appdata.outlook.mail", section: "appdata", group: "outlook", sensitive: false, enabled: false },
+    { id: "appdata.gmail.search", section: "appdata", group: "gmail", sensitive: false, enabled: false },
     { id: "appdata.gmail.thread", section: "appdata", group: "gmail", sensitive: false, enabled: false },
     { id: "appdata.gmail.attachments", section: "appdata", group: "gmail", sensitive: false, enabled: false },
     { id: "appdata.gmail.draft", section: "appdata", group: "gmail", sensitive: false, enabled: false },

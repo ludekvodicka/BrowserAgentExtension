@@ -6,6 +6,7 @@ import { gmailThread } from "./appdata/gmail/gmailThread.ts";
 import { gmailAttachments } from "./appdata/gmail/gmailAttachments.ts";
 import { gmailDraft } from "./appdata/gmail/gmailDraft.ts";
 import { gmailReply } from "./appdata/gmail/gmailReply.ts";
+import { gmailSearch } from "./appdata/gmail/gmailSearch.ts";
 import { tabsOpen } from "./browser/tabs/tabsOpen.ts";
 import { tabsClose } from "./browser/tabs/tabsClose.ts";
 import { googleMeet, zoom, teams } from "./meetings/web/meetingTools.ts";
@@ -18,4 +19,4 @@ export const groups: ToolGroup[] = [{ section: "appdata", id: "slack", title: "S
   { section: "page", id: "control", title: "Page control", panel: "siteAccess", permissionNote: "Only on the approved sites above.",
     groupSwitch: "Allow page control on approved sites" },
   { section: "debug", id: "console", title: "Debug", panel: "debugAccess", permissionNote: "Only while a time-limited approval above is active." }];
-export const tools: BrowserTool[] = [slackCookies, slackApi, outlookMail, gmailThread, gmailAttachments, gmailDraft, gmailReply, tabsOpen, tabsClose, googleMeet, zoom, teams, ...pageTools, ...debugTools];
+export const tools: BrowserTool[] = [slackCookies, slackApi, outlookMail, gmailSearch, gmailThread, gmailAttachments, gmailDraft, gmailReply, tabsOpen, tabsClose, googleMeet, zoom, teams, ...pageTools, ...debugTools];
